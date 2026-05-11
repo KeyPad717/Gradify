@@ -48,9 +48,20 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
-                    for (int i = 0; i < services.size(); ++i) {
-                        def svc = services[i]
+                    def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
+                    def otherServices = ['api-gateway', 'stats-service', 'front-end']
+                    
+                    for (int i = 0; i < javaServices.size(); ++i) {
+                        def svc = javaServices[i]
+                        dir(svc) {
+                            echo "Building ${svc}..."
+                            sh "cp target/*.jar app.jar"
+                            sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
+                        }
+                    }
+                    
+                    for (int i = 0; i < otherServices.size(); ++i) {
+                        def svc = otherServices[i]
                         dir(svc) {
                             echo "Building ${svc}..."
                             sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
