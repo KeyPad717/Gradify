@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-ssr/
+.env*
+.idea/
+.vscode/
+.git/
+*.log

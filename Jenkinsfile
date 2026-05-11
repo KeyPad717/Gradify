@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/adityadave29/Gradify.git'
+                git branch: 'student-service', url: 'https://github.com/adityadave29/Gradify.git'
             }
         }
 
