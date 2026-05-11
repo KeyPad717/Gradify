@@ -1,0 +1,23 @@
+---
+- name: Deploy Gradify K8s Manifests
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Ensure target deployment directory exists
+      file:
+        path: /tmp/gradify-k8s-deploy
+        state: directory
+
+    - name: Copy K8s manifests from repository to target host directory
+      copy:
+        src: ../k8s/
+        dest: /tmp/gradify-k8s-deploy/
+
+    - name: Run kubectl apply to deploy all configuration files
+      command: kubectl apply -f /tmp/gradify-k8s-deploy/
+      register: kubectl_output
+      failed_when: kubectl_output.rc != 0
+
+    - name: Show kubectl output
+      debug:
+        var: kubectl_output.stdout_lines
