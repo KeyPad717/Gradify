@@ -10,10 +10,23 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                git branch: 'master', url: 'https://github.com/adityadave29/Gradify.git'
-            }
-        }
+    steps {
+        checkout([
+            $class: 'GitSCM',
+            branches: [[name: '*/master']],
+            userRemoteConfigs: [[
+                url: 'https://github.com/adityadave29/Gradify.git'
+            ]],
+            extensions: [
+                [$class: 'CloneOption',
+                    shallow: true,
+                    depth: 1,
+                    noTags: true
+                ]
+            ]
+        ])
+    }
+}
 
         stage('Unit Testing') {
             steps {
