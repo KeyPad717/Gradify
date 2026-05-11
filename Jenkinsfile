@@ -20,10 +20,10 @@ pipeline {
                 echo "Running tests for all microservices..."
                 
                 // Java Services
-                dir('admin-service') { sh './mvnw clean test' }
-                dir('professor-service') { sh './mvnw clean test' }
-                dir('student-service') { sh './mvnw clean test' }
-                dir('user-service') { sh './mvnw clean test' }
+                dir('admin-service') { sh './mvnw clean package' }
+                dir('professor-service') { sh './mvnw clean package' }
+                dir('student-service') { sh './mvnw clean package' }
+                dir('user-service') { sh './mvnw clean package' }
 
                 // Go Services
                 dir('api-gateway') { sh 'go test ./...' }
