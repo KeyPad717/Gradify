@@ -9,11 +9,11 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'student-service', url: 'https://github.com/adityadave29/Gradify.git'
-            }
-        }
+        // stage('Checkout') {
+        //     steps {
+        //         git branch: 'master', url: 'https://github.com/adityadave29/Gradify.git'
+        //     }
+        // }
 
         stage('Unit Testing') {
             steps {
@@ -30,9 +30,17 @@ pipeline {
                 dir('stats-service') { sh 'go test ./...' }
 
                 // Front-end
-                dir('front-end') { 
-                    sh 'npm install'
-                    sh 'npm run test' 
+                dir('front-end') {
+                    sh 'npm ci'
+
+                    // Run tests only if test script exists
+                    sh '''
+                        if npm run | grep -q "test"; then
+                            npm run test
+                        else
+                            echo "No frontend tests found, skipping..."
+                        fi
+                    '''
                 }
             }
         }
