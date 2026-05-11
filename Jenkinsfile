@@ -45,18 +45,31 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Images') {
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
+                    for (int i = 0; i < services.size(); ++i) {
+                        def svc = services[i]
+                        dir(svc) {
+                            echo "Building ${svc}..."
+                            sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Images') {
             steps {
                 withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CRED, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                     sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
-
                     script {
                         def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
                         for (int i = 0; i < services.size(); ++i) {
                             def svc = services[i]
                             dir(svc) {
-                                echo "Building and Pushing ${svc}..."
-                                sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
+                                echo "Pushing ${svc}..."
                                 sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                             }
                         }
