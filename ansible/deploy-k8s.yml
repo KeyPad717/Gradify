@@ -13,6 +13,24 @@
         src: ../k8s/
         dest: /tmp/gradify-k8s-deploy/
 
+    - name: Check if Minikube is installed
+      command: which minikube
+      register: minikube_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Download Minikube if not installed
+      get_url:
+        url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        dest: /tmp/minikube
+        mode: '0755'
+      when: minikube_check.rc != 0
+
+    - name: Install Minikube
+      command: install /tmp/minikube /usr/local/bin/minikube
+      become: yes
+      when: minikube_check.rc != 0
+
     - name: Ensure Minikube is running
       command: minikube start
       register: minikube_output
