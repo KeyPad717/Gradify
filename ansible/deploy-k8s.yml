@@ -32,12 +32,12 @@
       when: minikube_check.rc != 0
 
     - name: Ensure Minikube is running
-      command: minikube start
+      command: minikube start --memory 4096 --cpus 2
       register: minikube_output
       changed_when: "'Done! kubectl is now configured' in minikube_output.stdout"
 
     - name: Run kubectl apply to deploy all configuration files
-      command: kubectl apply -f /tmp/gradify-k8s-deploy/
+      command: kubectl apply -R -f /tmp/gradify-k8s-deploy/
       register: kubectl_output
       failed_when: kubectl_output.rc != 0
 
