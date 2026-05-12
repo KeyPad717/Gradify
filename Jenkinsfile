@@ -28,6 +28,27 @@ pipeline {
     }
 }
 
+        stage('Environment Verification') {
+            steps {
+                echo "Starting in a clean environment: Pruning unused Docker data to free up space..."
+                sh 'docker system prune -af --volumes || true'
+                
+                script {
+                    echo "Checking available storage space..."
+                    // Get disk usage percentage of the root partition
+                    def dfOutput = sh(script: "df -h / | awk 'NR==2 {print \\$5}' | sed 's/%//'", returnStdout: true).trim()
+                    def usage = dfOutput.toInteger()
+                    echo "Current disk usage is at ${usage}%"
+                    
+                    if (usage > 85) {
+                        error("Disk usage is critically high (${usage}%). Failing pipeline to prevent deployment issues.")
+                    } else {
+                        echo "Sufficient storage available. Moving forward with the pipeline."
+                    }
+                }
+            }
+        }
+
         stage('Unit Testing') {
             steps {
                 echo "Running tests for all microservices..."
