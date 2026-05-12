@@ -36,7 +36,7 @@ pipeline {
                 script {
                     echo "Checking available storage space..."
                     // Get disk usage percentage of the root partition
-                    def dfOutput = sh(script: "df -h / | awk 'NR==2 {print \\$5}' | sed 's/%//'", returnStdout: true).trim()
+                    def dfOutput = sh(script: ''' df -h / | awk 'NR==2 {print $5}' | sed 's/%//' ''',returnStdout: true).trim()                    
                     def usage = dfOutput.toInteger()
                     echo "Current disk usage is at ${usage}%"
                     
