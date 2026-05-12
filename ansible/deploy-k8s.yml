@@ -13,6 +13,11 @@
         src: ../k8s/
         dest: /tmp/gradify-k8s-deploy/
 
+    - name: Ensure Minikube is running
+      command: minikube start
+      register: minikube_output
+      changed_when: "'Done! kubectl is now configured' in minikube_output.stdout"
+
     - name: Run kubectl apply to deploy all configuration files
       command: kubectl apply -f /tmp/gradify-k8s-deploy/
       register: kubectl_output
