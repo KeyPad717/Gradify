@@ -31,10 +31,20 @@
       become: yes
       when: minikube_check.rc != 0
 
-    - name: Ensure Minikube is running
+    - name: Ensure Minikube is running with desired resources
       command: minikube start --memory 4096 --cpus 2
-      register: minikube_output
-      changed_when: "'Done! kubectl is now configured' in minikube_output.stdout"
+      register: minikube_start_result
+      ignore_errors: yes
+
+    - name: Delete and recreate Minikube if resource change is required
+      block:
+        - name: Delete existing Minikube cluster
+          command: minikube delete
+        - name: Start Minikube with desired resources again
+          command: minikube start --memory 4096 --cpus 2
+      when: 
+        - minikube_start_result.rc != 0
+        - "'change the memory size' in minikube_start_result.stderr or 'change the cpu count' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr"
 
     - name: Run kubectl apply to deploy all configuration files
       command: kubectl apply -R -f /tmp/gradify-k8s-deploy/
