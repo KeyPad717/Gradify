@@ -100,9 +100,9 @@ pipeline {
                 
                 echo "Deploying Gradify to Kubernetes..."
                 sh '''
+                    rm -rf /tmp/gradify-k8s-deploy
                     mkdir -p /tmp/gradify-k8s-deploy
                     cp k8s/*.yaml /tmp/gradify-k8s-deploy/
-                    # cp k8s/elk/*.yaml /tmp/gradify-k8s-deploy/
                     kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
                 '''
             }
