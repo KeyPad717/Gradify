@@ -5,8 +5,8 @@ pipeline {
         DOCKERHUB_CRED = 'dockerhub-credentials'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
-        // Add common Mac/Linux tool paths to Jenkins environment
-        PATH = "/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+        // Add both Intel and Apple Silicon Mac tool paths
+        PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
     }
 
     stages {
