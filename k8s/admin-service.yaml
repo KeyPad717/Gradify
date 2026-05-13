@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: admin-service
-        image: key717/admin-service:latest 
+        image: adityadave29/admin-service:latest 
         imagePullPolicy: Always
         ports:
         - containerPort: 8083

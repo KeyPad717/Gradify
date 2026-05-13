@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: professor-service
-        image: key717/prof-service:latest
+        image: adityadave29/professor-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8084

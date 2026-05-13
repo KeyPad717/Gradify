@@ -4,7 +4,7 @@ pipeline {
     environment {
         // Docker Hub credentials should be stored in Jenkins with this ID
         DOCKERHUB_CRED = 'dockerhub-credentials'
-        DOCKER_USER = 'key717'
+        DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
     }
 
