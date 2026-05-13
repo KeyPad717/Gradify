@@ -8,6 +8,11 @@ pipeline {
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
     }
 
+    tools {
+        go 'go'
+        nodejs 'nodejs'
+    }
+
     stages {
         // stage('Checkout') {
         //     steps {
