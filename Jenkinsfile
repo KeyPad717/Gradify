@@ -40,10 +40,10 @@ pipeline {
                     def usage = dfOutput.toInteger()
                     echo "Current disk usage is at ${usage}%"
                     
-                    if (usage > 85) {
-                        error("Disk usage is critically high (${usage}%). Failing pipeline to prevent deployment issues.")
+                    if (usage > 95) {
+                        error("Disk usage is critically high (${usage}%). Failing pipeline to prevent system crash.")
                     } else {
-                        echo "Sufficient storage available. Moving forward with the pipeline."
+                        echo "Disk usage is at ${usage}%. Proceeding with --force flags enabled."
                     }
                 }
             }

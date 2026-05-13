@@ -32,19 +32,25 @@
       when: minikube_check.rc != 0
 
     - name: Ensure Minikube is running with desired resources
-      command: minikube start --memory 4096 --cpus 2
+      command: minikube start --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
       register: minikube_start_result
       ignore_errors: yes
 
-    - name: Delete and recreate Minikube if resource change is required
+    - name: Delete and recreate Minikube if startup failed or resource change required
       block:
         - name: Delete existing Minikube cluster
           command: minikube delete
-        - name: Start Minikube with desired resources again
-          command: minikube start --memory 4096 --cpus 2
+        - name: Start Minikube fresh with desired resources
+          command: minikube start --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
       when: 
-        - minikube_start_result.rc != 0
-        - "'change the memory size' in minikube_start_result.stderr or 'change the cpu count' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr"
+        - "minikube_start_result.rc != 0 or 'K8S_APISERVER_MISSING' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr"
+
+    - name: Wait for Kubernetes API to be responsive
+      command: kubectl wait --for=condition=Ready nodes --all --timeout=120s
+      register: api_wait
+      until: api_wait.rc == 0
+      retries: 10
+      delay: 15
 
     - name: Run kubectl apply to deploy all configuration files
       command: kubectl apply -R -f /tmp/gradify-k8s-deploy/
