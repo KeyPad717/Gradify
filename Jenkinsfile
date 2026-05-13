@@ -77,8 +77,24 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
+                echo "Checking Kubernetes cluster status..."
+                sh '''
+                    # Show current context for debugging
+                    kubectl config current-context || echo "No context set"
+                    
+                    # Try to check connectivity
+                    if ! kubectl cluster-info > /dev/null 2>&1; then
+                        echo "Cluster unreachable. Attempting to start minikube..."
+                        if command -v minikube > /dev/null 2>&1; then
+                            minikube start --wait=all
+                        else
+                            echo "ERROR: Cluster is down and 'minikube' command not found. Please start your cluster manually."
+                            exit 1
+                        fi
+                    fi
+                '''
+                
                 echo "Deploying Gradify to Kubernetes..."
-                // Bypass Ansible and run kubectl directly for better reliability
                 sh '''
                     mkdir -p /tmp/gradify-k8s-deploy
                     cp k8s/*.yaml /tmp/gradify-k8s-deploy/
