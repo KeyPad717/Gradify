@@ -13,13 +13,13 @@ spec:
             name: api-gateway
             port:
               number: 8080
-      - path: /kibana
+      - path: /grafana
         pathType: Prefix
         backend:
           service:
-            name: kibana
+            name: grafana
             port:
-              number: 5601
+              number: 3000
       - path: /
         pathType: Prefix
         backend:
