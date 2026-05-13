@@ -45,20 +45,14 @@ data:
 
     scrape_configs:
     - job_name: kubernetes-pods
-      kubernetes_sd_configs:
-      - role: pod
+      static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: kubernetes-pods
+          __path__: /var/log/pods/*/*/*.log
       pipeline_stages:
       - cri: {}
-      relabel_configs:
-      - source_labels: [__meta_kubernetes_namespace]
-        target_label: namespace
-      - source_labels: [__meta_kubernetes_pod_name]
-        target_label: pod
-      - source_labels: [__meta_kubernetes_pod_container_name]
-        target_label: container
-      - action: replace
-        replacement: /var/log/pods/*/*/*.log
-        target_label: __path__
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -83,6 +77,9 @@ spec:
         - name: logs
           mountPath: /var/log/pods
           readOnly: true
+        - name: docker-containers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
         - name: config
           mountPath: /etc/promtail
         resources:
@@ -94,6 +91,9 @@ spec:
       - name: logs
         hostPath:
           path: /var/log/pods
+      - name: docker-containers
+        hostPath:
+          path: /var/lib/docker/containers
       - name: config
         configMap:
           name: promtail-config
