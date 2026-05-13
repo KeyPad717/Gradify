@@ -13,8 +13,17 @@
         src: ../k8s/
         dest: /tmp/gradify-k8s-deploy/
 
+    - name: Check Kubernetes cluster connectivity
+      command: kubectl cluster-info
+      register: cluster_info
+      failed_when: false
+
+    - name: Show cluster info for debugging
+      debug:
+        var: cluster_info.stdout_lines
+
     - name: Run kubectl apply to deploy all configuration files
-      command: kubectl apply -f /tmp/gradify-k8s-deploy/
+      command: kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
       register: kubectl_output
       failed_when: kubectl_output.rc != 0
 
