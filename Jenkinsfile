@@ -5,14 +5,16 @@ pipeline {
         DOCKERHUB_CRED = 'dockerhub-credentials'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
+        // Add common Mac/Linux tool paths to Jenkins environment
+        PATH = "/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
     }
 
     stages {
         stage('Unit Testing') {
             steps {
-                echo "Running tests for all microservices using Docker containers..."
+                echo "Running tests for all microservices..."
                 
-                // 1. Java Services (using Maven wrapper)
+                // 1. Java Services
                 script {
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     for (svc in javaServices) {
@@ -23,18 +25,21 @@ pipeline {
                     }
                 }
 
-                // 2. Go Services (running inside Golang Docker container)
-                echo "Testing Go services..."
-                sh '''
-                    docker run --rm -v $(pwd):/app -w /app/api-gateway golang:1.22-alpine go test ./...
-                    docker run --rm -v $(pwd):/app -w /app/stats-service golang:1.22-alpine go test ./...
-                '''
+                // 2. Go Services
+                dir('api-gateway') { sh 'go test ./...' }
+                dir('stats-service') { sh 'go test ./...' }
 
-                // 3. Front-end (running inside Node Docker container)
-                echo "Testing Front-end..."
-                sh '''
-                    docker run --rm -v $(pwd):/app -w /app/front-end node:20-alpine sh -c "npm ci && if npm run | grep -q 'test'; then npm run test; else echo 'No tests found'; fi"
-                '''
+                // 3. Front-end
+                dir('front-end') {
+                    sh 'npm install' // Using npm install directly on host
+                    sh '''
+                        if npm run | grep -q "test"; then
+                            npm run test
+                        else
+                            echo "No frontend tests found, skipping..."
+                        fi
+                    '''
+                }
             }
         }
 
@@ -45,9 +50,8 @@ pipeline {
                     for (svc in services) {
                         dir(svc) {
                             echo "Building ${svc}..."
-                            // For Java services, ensure the jar is copied to app.jar
                             if (fileExists('target')) {
-                                sh "cp target/*.jar app.jar || echo 'No jar found in target'"
+                                sh "cp target/*.jar app.jar || echo 'No jar found'"
                             }
                             sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
                         }
@@ -73,14 +77,10 @@ pipeline {
 
         stage('Deploy via Ansible') {
             steps {
-                echo "Deploying via Ansible container..."
-                // Using an ansible container to ensure the command is available
-                sh '''
-                    docker run --rm -v $(pwd):/app -w /app/ansible \
-                    -v $HOME/.kube:/root/.kube \
-                    willhallonline/ansible:latest \
-                    ansible-playbook -i inventory.ini deploy-k8s.yml
-                '''
+                dir('ansible') {
+                    echo "Deploying via Ansible..."
+                    sh 'ansible-playbook -i inventory.ini deploy-k8s.yml'
+                }
             }
         }
     }
