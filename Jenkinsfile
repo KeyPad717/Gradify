@@ -2,73 +2,53 @@ pipeline {
     agent any
 
     environment {
-        // Docker Hub credentials should be stored in Jenkins with this ID
         DOCKERHUB_CRED = 'dockerhub-credentials'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
     }
 
-    tools {
-        go 'go'
-        nodejs 'nodejs'
-    }
-
     stages {
-        // stage('Checkout') {
-        //     steps {
-        //         git branch: 'master', url: 'https://github.com/adityadave29/Gradify.git'
-        //     }
-        // }
-
         stage('Unit Testing') {
             steps {
-                echo "Running tests for all microservices..."
+                echo "Running tests for all microservices using Docker containers..."
                 
-                // Java Services
-                dir('admin-service') { sh './mvnw clean package' }
-                dir('professor-service') { sh './mvnw clean package' }
-                dir('student-service') { sh './mvnw clean package' }
-                dir('user-service') { sh './mvnw clean package' }
-
-                // Go Services
-                dir('api-gateway') { sh 'go test ./...' }
-                dir('stats-service') { sh 'go test ./...' }
-
-                // Front-end
-                dir('front-end') {
-                    sh 'npm ci'
-
-                    // Run tests only if test script exists
-                    sh '''
-                        if npm run | grep -q "test"; then
-                            npm run test
-                        else
-                            echo "No frontend tests found, skipping..."
-                        fi
-                    '''
+                // 1. Java Services (using Maven wrapper)
+                script {
+                    def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
+                    for (svc in javaServices) {
+                        dir(svc) {
+                            echo "Testing ${svc}..."
+                            sh './mvnw clean package -DskipTests=false'
+                        }
+                    }
                 }
+
+                // 2. Go Services (running inside Golang Docker container)
+                echo "Testing Go services..."
+                sh '''
+                    docker run --rm -v $(pwd):/app -w /app/api-gateway golang:1.22-alpine go test ./...
+                    docker run --rm -v $(pwd):/app -w /app/stats-service golang:1.22-alpine go test ./...
+                '''
+
+                // 3. Front-end (running inside Node Docker container)
+                echo "Testing Front-end..."
+                sh '''
+                    docker run --rm -v $(pwd):/app -w /app/front-end node:20-alpine sh -c "npm ci && if npm run | grep -q 'test'; then npm run test; else echo 'No tests found'; fi"
+                '''
             }
         }
 
         stage('Build Docker Images') {
             steps {
                 script {
-                    def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
-                    def otherServices = ['api-gateway', 'stats-service', 'front-end']
-                    
-                    for (int i = 0; i < javaServices.size(); ++i) {
-                        def svc = javaServices[i]
+                    def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
+                    for (svc in services) {
                         dir(svc) {
                             echo "Building ${svc}..."
-                            sh "cp target/*.jar app.jar"
-                            sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
-                        }
-                    }
-                    
-                    for (int i = 0; i < otherServices.size(); ++i) {
-                        def svc = otherServices[i]
-                        dir(svc) {
-                            echo "Building ${svc}..."
+                            // For Java services, ensure the jar is copied to app.jar
+                            if (fileExists('target')) {
+                                sh "cp target/*.jar app.jar || echo 'No jar found in target'"
+                            }
                             sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
                         }
                     }
@@ -82,12 +62,9 @@ pipeline {
                     sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                     script {
                         def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
-                        for (int i = 0; i < services.size(); ++i) {
-                            def svc = services[i]
-                            dir(svc) {
-                                echo "Pushing ${svc}..."
-                                sh "docker push ${env.DOCKER_USER}/${svc}:latest"
-                            }
+                        for (svc in services) {
+                            echo "Pushing ${svc}..."
+                            sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                         }
                     }
                 }
@@ -96,10 +73,14 @@ pipeline {
 
         stage('Deploy via Ansible') {
             steps {
-                dir('ansible') {
-                    // This triggers the ansible playbook to apply the k8s manifests
-                    sh 'ansible-playbook -i inventory.ini deploy-k8s.yml'
-                }
+                echo "Deploying via Ansible container..."
+                // Using an ansible container to ensure the command is available
+                sh '''
+                    docker run --rm -v $(pwd):/app -w /app/ansible \
+                    -v $HOME/.kube:/root/.kube \
+                    willhallonline/ansible:latest \
+                    ansible-playbook -i inventory.ini deploy-k8s.yml
+                '''
             }
         }
     }
@@ -108,12 +89,12 @@ pipeline {
         failure {
             mail to: "${env.EMAIL_RECIPIENT}",
                  subject: "Pipeline Failed: ${currentBuild.fullDisplayName}",
-                 body: "The Gradify Jenkins pipeline failed. Please check the Jenkins console output to find the error."
+                 body: "The Gradify Jenkins pipeline failed. Please check the Jenkins console output."
         }
         success {
             mail to: "${env.EMAIL_RECIPIENT}",
                  subject: "Pipeline Succeeded: ${currentBuild.fullDisplayName}",
-                 body: "The Gradify application was successfully tested, built, pushed, and deployed via Ansible."
+                 body: "The Gradify application was successfully tested, built, pushed, and deployed."
         }
     }
 }
