@@ -75,12 +75,15 @@ pipeline {
             }
         }
 
-        stage('Deploy via Ansible') {
+        stage('Deploy to Kubernetes') {
             steps {
-                dir('ansible') {
-                    echo "Deploying via Ansible..."
-                    sh 'ansible-playbook -i inventory.ini deploy-k8s.yml'
-                }
+                echo "Deploying Gradify to Kubernetes..."
+                // Bypass Ansible and run kubectl directly for better reliability
+                sh '''
+                    mkdir -p /tmp/gradify-k8s-deploy
+                    cp k8s/*.yaml /tmp/gradify-k8s-deploy/
+                    kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
+                '''
             }
         }
     }
