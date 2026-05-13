@@ -47,19 +47,20 @@ data:
     - job_name: kubernetes-pods
       kubernetes_sd_configs:
       - role: pod
+      pipeline_stages:
+      - cri: {}
       relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_label_app]
-        target_label: app
       - source_labels: [__meta_kubernetes_namespace]
         target_label: namespace
       - source_labels: [__meta_kubernetes_pod_name]
         target_label: pod
-      - action: replace
-        source_labels:
-        - __meta_kubernetes_pod_container_name
+      - source_labels: [__meta_kubernetes_pod_container_name]
         target_label: container
       - action: replace
-        replacement: /var/log/containers/*.log
+        replacement: /var/log/pods/*$1/*.log
+        separator: /
+        source_labels:
+        - __meta_kubernetes_pod_uid
         target_label: __path__
 ---
 apiVersion: apps/v1
@@ -83,7 +84,7 @@ spec:
           - "-config.file=/etc/promtail/promtail.yaml"
         volumeMounts:
         - name: logs
-          mountPath: /var/log/containers
+          mountPath: /var/log/pods
           readOnly: true
         - name: config
           mountPath: /etc/promtail
@@ -95,7 +96,7 @@ spec:
       volumes:
       - name: logs
         hostPath:
-          path: /var/log/containers
+          path: /var/log/pods
       - name: config
         configMap:
           name: promtail-config
