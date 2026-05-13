@@ -28,9 +28,9 @@ spec:
           value: "true"
         resources:
           limits:
-            memory: 1Gi
-          requests:
             memory: 512Mi
+          requests:
+            memory: 256Mi
 ---
 apiVersion: v1
 kind: Service

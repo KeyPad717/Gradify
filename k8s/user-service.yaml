@@ -25,17 +25,6 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8081
-        livenessProbe:
-          tcpSocket:
-            port: 8081
-          initialDelaySeconds: 30
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 10
         resources:
           requests:
             cpu: "100m"

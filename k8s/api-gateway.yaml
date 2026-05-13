@@ -25,17 +25,6 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
-        livenessProbe:
-          tcpSocket:
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
         env:
         - name: USER_SERVICE_URL
           value: "http://user-service:8081"
