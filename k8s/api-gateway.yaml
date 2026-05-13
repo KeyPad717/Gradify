@@ -25,6 +25,16 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
         env:
         - name: USER_SERVICE_URL
           value: "http://user-service:8081"
@@ -38,10 +48,10 @@ spec:
           value: "http://stats-service:8086"
         resources:
           requests:
-            cpu: "50m"
+            cpu: "30m"
             memory: "64Mi"
           limits:
-            cpu: "250m"
+            cpu: "100m"
             memory: "128Mi"
 ---
 apiVersion: v1
