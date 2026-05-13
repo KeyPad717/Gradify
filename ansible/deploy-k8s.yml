@@ -13,6 +13,11 @@
         src: ../k8s/
         dest: /tmp/gradify-k8s-deploy/
 
+    - name: Copy ELK manifests to target host directory
+      copy:
+        src: ../k8s/elk/
+        dest: /tmp/gradify-k8s-deploy/
+
     - name: Check Kubernetes cluster connectivity
       command: kubectl cluster-info
       register: cluster_info

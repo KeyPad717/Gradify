@@ -98,6 +98,7 @@ pipeline {
                 sh '''
                     mkdir -p /tmp/gradify-k8s-deploy
                     cp k8s/*.yaml /tmp/gradify-k8s-deploy/
+                    cp k8s/elk/*.yaml /tmp/gradify-k8s-deploy/
                     kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
                 '''
             }
