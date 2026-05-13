@@ -35,13 +35,18 @@ spec:
             port: 8083
           initialDelaySeconds: 30
           periodSeconds: 10
+        startupProbe:
+          tcpSocket:
+            port: 8083
+          failureThreshold: 12
+          periodSeconds: 10
         resources:
           requests:
-            cpu: "50m"
-            memory: "256Mi"
-          limits:
-            cpu: "250m"
+            cpu: "100m"
             memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
 ---
 apiVersion: v1
 kind: Service

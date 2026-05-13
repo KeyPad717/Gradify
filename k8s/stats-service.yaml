@@ -28,20 +28,25 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 8086
-          initialDelaySeconds: 15
+          initialDelaySeconds: 45
           periodSeconds: 20
         readinessProbe:
           tcpSocket:
             port: 8086
-          initialDelaySeconds: 5
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        startupProbe:
+          tcpSocket:
+            port: 8086
+          failureThreshold: 12
           periodSeconds: 10
         resources:
           requests:
             cpu: "50m"
-            memory: "64Mi"
+            memory: "256Mi"
           limits:
             cpu: "250m"
-            memory: "128Mi"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
