@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CRED = 'dockerhub-credentials'
+        DOCKERHUB_CRED = 'docker-creds'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'keyworkmail2@gmail.com'
         // Add both Intel and Apple Silicon Mac tool paths
