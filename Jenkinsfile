@@ -68,7 +68,9 @@ pipeline {
                         def services = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
                         for (svc in services) {
                             echo "Pushing ${svc}..."
-                            sh "docker push ${env.DOCKER_USER}/${svc}:latest"
+                            retry(3) {
+                                sh "docker push ${env.DOCKER_USER}/${svc}:latest"
+                            }
                         }
                     }
                 }
