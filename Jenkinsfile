@@ -30,8 +30,8 @@ pipeline {
 
         stage('Environment Verification') {
             steps {
-                echo "Starting in a clean environment: Pruning unused Docker data to free up space..."
-                sh 'docker system prune -af --volumes || true'
+                echo "Cleaning up dangling images while preserving runtime volumes..."
+                sh 'docker image prune -f || true'
                 
                 script {
                     echo "Checking available storage space..."
@@ -115,7 +115,9 @@ pipeline {
                             def svc = services[i]
                             dir(svc) {
                                 echo "Pushing ${svc}..."
-                                sh "docker push ${env.DOCKER_USER}/${svc}:latest"
+                                retry(3) {
+                                    sh "docker push ${env.DOCKER_USER}/${svc}:latest"
+                                }
                             }
                         }
                     }

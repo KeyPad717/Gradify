@@ -31,19 +31,25 @@
       become: yes
       when: minikube_check.rc != 0
 
-    - name: Ensure Minikube is running with desired resources
-      command: minikube start --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
+    - name: Verify Docker daemon is running
+      command: docker info
+      register: docker_info
+      failed_when: docker_info.rc != 0
+      changed_when: false
+
+    - name: Ensure Minikube is running with Docker driver
+      command: minikube start --driver=docker --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
       register: minikube_start_result
       ignore_errors: yes
 
-    - name: Delete and recreate Minikube if startup failed or resource change required
+    - name: Delete and recreate Minikube ONLY if cluster is corrupted
       block:
-        - name: Delete existing Minikube cluster
+        - name: Delete corrupted Minikube cluster
           command: minikube delete
-        - name: Start Minikube fresh with desired resources
-          command: minikube start --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
+        - name: Start Minikube fresh
+          command: minikube start --driver=docker --memory 4096 --cpus 2 --force --extra-config=kubelet.image-gc-high-threshold=95
       when: 
-        - "minikube_start_result.rc != 0 or 'K8S_APISERVER_MISSING' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr"
+        - "minikube_start_result.rc != 0 and ('K8S_APISERVER_MISSING' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr)"
 
     - name: Wait for Kubernetes API to be responsive
       command: kubectl wait --for=condition=Ready nodes --all --timeout=120s
@@ -51,6 +57,17 @@
       until: api_wait.rc == 0
       retries: 10
       delay: 15
+
+    - name: Wait for CoreDNS to be ready (fixes external resolution)
+      command: kubectl wait --for=condition=ready pod -n kube-system -l k8s-app=kube-dns --timeout=120s
+      ignore_errors: yes
+
+    - name: Preload Ingress images to bypass network timeouts
+      command: "minikube image load {{ item }}"
+      loop:
+        - registry.k8s.io/ingress-nginx/controller:v1.10.1
+        - registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.1
+      ignore_errors: yes
 
     - name: Enable Minikube Ingress addon
       command: minikube addons enable ingress
