@@ -16,23 +16,30 @@ pipeline {
         stage('Detect Changes') {
             steps {
                 script {
-                    echo "Detecting which microservices changed..."
+                    echo "Detecting which microservices changed via Jenkins ChangeSets..."
                     def changedFiles = []
-                    try {
-                        // Attempt to get changes from the last commit
-                        def output = sh(script: 'git diff --name-only HEAD~1..HEAD', returnStdout: true).trim()
-                        if (output) changedFiles = output.split('\n')
-                    } catch (Exception e) {
-                        echo "Could not detect changes (first build or manual trigger). Rebuilding all."
+                    
+                    // Iterate through the changesets provided by Jenkins/Git
+                    for (int i = 0; i < currentBuild.changeSets.size(); i++) {
+                        def entries = currentBuild.changeSets[i].items
+                        for (int j = 0; j < entries.length; j++) {
+                            def entry = entries[j]
+                            def files = entry.affectedFiles
+                            for (int k = 0; k < files.size(); k++) {
+                                changedFiles.add(files[k].path)
+                            }
+                        }
                     }
                     
                     def allServices = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
                     def changed = []
                     
-                    // If no changes detected or root files change, build everything
-                    def forceAll = changedFiles.isEmpty() || changedFiles.any { it == "Jenkinsfile" || it.startsWith("k8s/") || it.startsWith("ansible/") }
+                    // FALLBACK: If manual build or root config change, build everything
+                    def isManual = changedFiles.isEmpty()
+                    def forceAll = isManual || changedFiles.any { it == "Jenkinsfile" || it.startsWith("k8s/") || it.startsWith("ansible/") }
                     
                     if (forceAll) {
+                        echo isManual ? "Manual build triggered. Building all services." : "Global config change detected. Rebuilding all."
                         changed = allServices
                     } else {
                         for (svc in allServices) {
@@ -42,7 +49,7 @@ pipeline {
                         }
                     }
                     
-                    env.CHANGED_SERVICES = changed.join(',')
+                    env.CHANGED_SERVICES = changed.unique().join(',')
                     echo "Services to build: ${env.CHANGED_SERVICES}"
                 }
             }
