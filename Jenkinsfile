@@ -1,10 +1,11 @@
 pipeline {
     agent any
-
+    // commeny added for poll SCM
     environment {
         DOCKERHUB_CRED = 'docker-creds'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'daveadityan2004@gmail.com'
+        EMAIL_RECIPIENT1 = 'daveadityan2005@gmail.com'
         // Add both Intel and Apple Silicon Mac tool paths
         PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
     }
