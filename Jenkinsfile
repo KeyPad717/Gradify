@@ -9,20 +9,22 @@ pipeline {
         
         // This will store the list of services that actually changed
         CHANGED_SERVICES = ""
+        SERVICES_TO_BUILD = ""
     }
 
     stages {
         stage('Detect Changes') {
             steps {
                 script {
-                    echo "Detecting which microservices changed..."
+                    echo "Starting Microservice Change Detection..."
                     def changedFiles = []
                     
+                    // 1. Collect all changed files from the changeset
                     currentBuild.changeSets.each { changeLogSet ->
                         changeLogSet.items.each { entry ->
                             entry.affectedFiles.each { file ->
                                 def path = file.path.toString()
-                                echo "FILE CHANGED: ${path}"
+                                echo "DEBUG: Detected file change: ${path}"
                                 changedFiles.add(path)
                             }
                         }
@@ -31,40 +33,46 @@ pipeline {
                     def allServices = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
                     def changed = []
                     
-                    // FALLBACK: If manual build or root config change, build everything
-                    def isManual = changedFiles.isEmpty()
-                    def hasGlobalChanges = false
-                    
-                    for (f in changedFiles) {
-                        if (f == "Jenkinsfile" || f.startsWith("k8s/") || f.startsWith("ansible/") || !f.contains("/")) {
-                            hasGlobalChanges = true
-                            break
-                        }
-                    }
-                    
-                    if (isManual || hasGlobalChanges) {
-                        echo isManual ? "Manual build. Building all." : "Global/Root changes detected. Building all."
+                    // 2. Identify manual vs automated builds
+                    if (changedFiles.isEmpty()) {
+                        echo "No changesets found. Defaulting to FULL BUILD for all services."
                         changed = allServices
                     } else {
-                        for (svc in allServices) {
-                            for (f in changedFiles) {
-                                if (f.contains(svc + "/")) {
-                                    changed.add(svc)
-                                    break
+                        // Check for global config changes first
+                        def hasGlobal = false
+                        for (f in changedFiles) {
+                            if (f == "Jenkinsfile" || f.startsWith("k8s/") || f.startsWith("ansible/") || !f.contains("/")) {
+                                hasGlobal = true
+                                break
+                            }
+                        }
+                        
+                        if (hasGlobal) {
+                            echo "Global configuration change detected. Building ALL services."
+                            changed = allServices
+                        } else {
+                            // Match files to service folders
+                            for (svc in allServices) {
+                                echo "Checking if ${svc} needs building..."
+                                for (f in changedFiles) {
+                                    if (f.startsWith(svc + "/")) {
+                                        echo "MATCH: ${f} belongs to ${svc}. Adding to build list."
+                                        changed.add(svc)
+                                        break
+                                    }
                                 }
                             }
                         }
                     }
                     
-                    // If we found files but they didn't match any service, build all to be safe
-                    if (!isManual && changed.isEmpty()) {
-                        echo "Unknown changes detected (${changedFiles.size()} files). Falling back to Full Build."
+                    // 3. Finalize the build list
+                    if (changed.isEmpty() && !changedFiles.isEmpty()) {
+                        echo "Unknown changes detected. Falling back to FULL BUILD for safety."
                         changed = allServices
                     }
                     
-                    def result = changed.unique().join(',')
-                    env.CHANGED_SERVICES = result ? result : ""
-                    echo "Final Services to build: ${env.CHANGED_SERVICES}"
+                    env.SERVICES_TO_BUILD = changed.unique().join(',')
+                    echo "PIPELINE_PLAN: The following services will be processed: [${env.SERVICES_TO_BUILD}]"
                 }
             }
         }
@@ -72,18 +80,20 @@ pipeline {
         stage('Unit Testing') {
             steps {
                 script {
-                    if (!env.CHANGED_SERVICES) {
-                        echo "No services to test."
+                    if (!env.SERVICES_TO_BUILD) {
+                        echo "No services identified for testing."
                         return
                     }
-                    def services = env.CHANGED_SERVICES.split(',')
+                    
+                    def services = env.SERVICES_TO_BUILD.split(',')
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
-                    services.each { svc ->
-                        if (!svc) return
+                    for (svc in services) {
+                        if (!svc) continue
+                        
                         if (javaServices.contains(svc)) {
                             dir(svc) {
-                                echo "Building JAR for ${svc} (Skipping tests due to DB connectivity)..."
+                                echo "Building JAR: ${svc} (Skipping tests)..."
                                 sh './mvnw clean package -DskipTests=true'
                             }
                         } else if (svc == 'api-gateway' || svc == 'stats-service') {
@@ -93,7 +103,7 @@ pipeline {
                             }
                         } else if (svc == 'front-end') {
                             dir('front-end') {
-                                echo "Installing and building Frontend..."
+                                echo "Building Frontend Production Bundle..."
                                 sh 'npm install && npm run build'
                             }
                         }
@@ -105,14 +115,14 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    if (!env.CHANGED_SERVICES) return
-                    def services = env.CHANGED_SERVICES.split(',')
+                    if (!env.SERVICES_TO_BUILD) return
+                    def services = env.SERVICES_TO_BUILD.split(',')
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
-                    services.each { svc ->
-                        if (!svc) return
+                    for (svc in services) {
+                        if (!svc) continue
                         dir(svc) {
-                            echo "Building Docker Image: ${svc}..."
+                            echo "Building Docker Image for: ${svc}"
                             if (javaServices.contains(svc)) {
                                 sh "cp target/*.jar app.jar || echo 'No jar found'"
                             }
@@ -130,12 +140,12 @@ pipeline {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                     }
                     script {
-                        if (!env.CHANGED_SERVICES) return
-                        def services = env.CHANGED_SERVICES.split(',')
+                        if (!env.SERVICES_TO_BUILD) return
+                        def services = env.SERVICES_TO_BUILD.split(',')
                         
-                        services.each { svc ->
-                            if (!svc) return
-                            echo "Pushing Image: ${svc}..."
+                        for (svc in services) {
+                            if (!svc) continue
+                            echo "Pushing Image: ${svc} to DockerHub..."
                             retry(3) {
                                 sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                             }
