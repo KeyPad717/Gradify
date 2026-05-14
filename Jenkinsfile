@@ -5,7 +5,6 @@ pipeline {
         DOCKERHUB_CRED = 'docker-creds'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'daveadityan2004@gmail.com'
-        EMAIL_RECIPIENT1 = 'daveadityan2005@gmail.com'
         PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
         
         // This will store the list of services that actually changed
