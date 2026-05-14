@@ -33,10 +33,21 @@
       debug:
         var: cluster_info.stdout_lines
 
-    - name: Run kubectl apply to deploy all configuration files
+    - name: Apply Kubernetes manifests
       command: kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
       register: kubectl_output
       failed_when: kubectl_output.rc != 0
+
+    - name: Force rollout for updated services
+      shell: |
+        IFS=',' read -ra ADDR <<< "{{ lookup('env', 'CHANGED_SERVICES') }}"
+        for svc in "${ADDR[@]}"; do
+          if [ -n "$svc" ]; then
+            echo "Restarting deployment $svc..."
+            kubectl rollout restart deployment/$svc || echo "Deployment $svc not found, skipping restart."
+          fi
+        done
+      ignore_errors: yes
 
     - name: Show kubectl output
       debug:
