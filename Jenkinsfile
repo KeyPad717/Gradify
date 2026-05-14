@@ -19,14 +19,11 @@ pipeline {
                     echo "Detecting which microservices changed via Jenkins ChangeSets..."
                     def changedFiles = []
                     
-                    // Iterate through the changesets provided by Jenkins/Git
-                    for (int i = 0; i < currentBuild.changeSets.size(); i++) {
-                        def entries = currentBuild.changeSets[i].items
-                        for (int j = 0; j < entries.length; j++) {
-                            def entry = entries[j]
-                            def files = entry.affectedFiles
-                            for (int k = 0; k < files.size(); k++) {
-                                changedFiles.add(files[k].path)
+                    // Standard Groovy iteration for ChangeSets
+                    currentBuild.changeSets.each { changeLogSet ->
+                        changeLogSet.items.each { entry ->
+                            entry.affectedFiles.each { file ->
+                                changedFiles.add(file.path)
                             }
                         }
                     }
@@ -42,7 +39,7 @@ pipeline {
                         echo isManual ? "Manual build triggered. Building all services." : "Global config change detected. Rebuilding all."
                         changed = allServices
                     } else {
-                        for (svc in allServices) {
+                        allServices.each { svc ->
                             if (changedFiles.any { it.startsWith(svc + "/") }) {
                                 changed.add(svc)
                             }
@@ -58,26 +55,29 @@ pipeline {
         stage('Unit Testing') {
             steps {
                 script {
-                    if (env.CHANGED_SERVICES == "") {
+                    if (!env.CHANGED_SERVICES) {
                         echo "No services to test."
                         return
                     }
                     def services = env.CHANGED_SERVICES.split(',')
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
-                    for (svc in services) {
-                        if (svc == "") continue
+                    services.each { svc ->
+                        if (!svc) return
                         if (javaServices.contains(svc)) {
                             dir(svc) {
                                 echo "Building JAR for ${svc} (Skipping tests due to DB connectivity)..."
                                 sh './mvnw clean package -DskipTests=true'
                             }
                         } else if (svc == 'api-gateway' || svc == 'stats-service') {
-                            dir(svc) { sh 'go test ./...' }
+                            dir(svc) { 
+                                echo "Testing Go service: ${svc}"
+                                sh 'go test ./...' 
+                            }
                         } else if (svc == 'front-end') {
                             dir('front-end') {
-                                sh 'npm install'
-                                sh 'npm run build' // Ensure frontend builds
+                                echo "Installing and building Frontend..."
+                                sh 'npm install && npm run build'
                             }
                         }
                     }
@@ -88,14 +88,15 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
+                    if (!env.CHANGED_SERVICES) return
                     def services = env.CHANGED_SERVICES.split(',')
-                    if (env.CHANGED_SERVICES == "") return
+                    def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
-                    for (svc in services) {
-                        if (svc == "") continue
+                    services.each { svc ->
+                        if (!svc) return
                         dir(svc) {
-                            echo "Building ${svc}..."
-                            if (fileExists('target')) {
+                            echo "Building Docker Image: ${svc}..."
+                            if (javaServices.contains(svc)) {
                                 sh "cp target/*.jar app.jar || echo 'No jar found'"
                             }
                             sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
@@ -112,12 +113,12 @@ pipeline {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                     }
                     script {
+                        if (!env.CHANGED_SERVICES) return
                         def services = env.CHANGED_SERVICES.split(',')
-                        if (env.CHANGED_SERVICES == "") return
                         
-                        for (svc in services) {
-                            if (svc == "") continue
-                            echo "Pushing ${svc}..."
+                        services.each { svc ->
+                            if (!svc) return
+                            echo "Pushing Image: ${svc}..."
                             retry(3) {
                                 sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                             }
