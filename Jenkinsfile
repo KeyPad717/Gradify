@@ -21,8 +21,9 @@ pipeline {
                     currentBuild.changeSets.each { changeLogSet ->
                         changeLogSet.items.each { entry ->
                             entry.affectedFiles.each { file ->
-                                echo "FILE CHANGED: ${file.path}"
-                                changedFiles.add(file.path)
+                                def path = file.path.toString()
+                                echo "FILE CHANGED: ${path}"
+                                changedFiles.add(path)
                             }
                         }
                     }
@@ -32,26 +33,37 @@ pipeline {
                     
                     // FALLBACK: If manual build or root config change, build everything
                     def isManual = changedFiles.isEmpty()
-                    def hasGlobalChanges = changedFiles.any { it == "Jenkinsfile" || it.startsWith("k8s/") || it.startsWith("ansible/") || !it.contains("/") }
+                    def hasGlobalChanges = false
+                    
+                    for (f in changedFiles) {
+                        if (f == "Jenkinsfile" || f.startsWith("k8s/") || f.startsWith("ansible/") || !f.contains("/")) {
+                            hasGlobalChanges = true
+                            break
+                        }
+                    }
                     
                     if (isManual || hasGlobalChanges) {
                         echo isManual ? "Manual build. Building all." : "Global/Root changes detected. Building all."
                         changed = allServices
                     } else {
-                        allServices.each { svc ->
-                            if (changedFiles.any { it.contains(svc + "/") }) {
-                                changed.add(svc)
+                        for (svc in allServices) {
+                            for (f in changedFiles) {
+                                if (f.contains(svc + "/")) {
+                                    changed.add(svc)
+                                    break
+                                }
                             }
                         }
                     }
                     
                     // If we found files but they didn't match any service, build all to be safe
                     if (!isManual && changed.isEmpty()) {
-                        echo "Unknown changes detected. Falling back to Full Build."
+                        echo "Unknown changes detected (${changedFiles.size()} files). Falling back to Full Build."
                         changed = allServices
                     }
                     
-                    env.CHANGED_SERVICES = changed.unique().join(',')
+                    def result = changed.unique().join(',')
+                    env.CHANGED_SERVICES = result ? result : ""
                     echo "Final Services to build: ${env.CHANGED_SERVICES}"
                 }
             }
