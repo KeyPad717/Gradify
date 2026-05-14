@@ -30,8 +30,38 @@
       command: install /tmp/minikube /usr/local/bin/minikube
       become: yes
       when: minikube_check.rc != 0
+      
+    - name: Check if Docker is installed
+      command: which docker
+      register: docker_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install Docker if missing
+      become: yes
+      shell: |
+        apt-get update
+        apt-get install -y docker.io
+      when: docker_check.rc != 0
+
+    - name: Start Docker service
+      become: yes
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Wait for Docker daemon startup
+      pause:
+        seconds: 10
+        
+    - name: Add Jenkins user to docker group
+      become: yes
+      command: usermod -aG docker jenkins
+      ignore_errors: yes
 
     - name: Verify Docker daemon is running
+      become: yes
       command: docker info
       register: docker_info
       failed_when: docker_info.rc != 0
