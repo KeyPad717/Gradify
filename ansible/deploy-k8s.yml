@@ -2,6 +2,8 @@
 - name: Deploy Gradify K8s Manifests
   hosts: localhost
   connection: local
+  vars_files:
+    - secrets.yml
   tasks:
     - name: Ensure target deployment directory exists
       file:
@@ -13,9 +15,13 @@
         src: ../k8s/
         dest: /tmp/gradify-k8s-deploy/
 
-    - name: Copy ELK manifests to target host directory
+    - name: Inject Vault secrets into deployment (Simulated)
+      debug:
+        msg: "Ready to deploy with sensitive key starting with: {{ supabase_key[:10] }}..."
+
+    - name: Copy LPG manifests to target host directory
       copy:
-        src: ../k8s/elk/
+        src: ../k8s/lpg/
         dest: /tmp/gradify-k8s-deploy/
 
     - name: Check Kubernetes cluster connectivity

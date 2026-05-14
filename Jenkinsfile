@@ -79,33 +79,22 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy with Ansible') {
             steps {
-                echo "Checking Kubernetes cluster status..."
-                sh '''
-                    # Show current context for debugging
-                    kubectl config current-context || echo "No context set"
-                    
-                    # Try to check connectivity
-                    if ! kubectl cluster-info > /dev/null 2>&1; then
-                        echo "Cluster unreachable. Attempting to start minikube..."
-                        if command -v minikube > /dev/null 2>&1; then
-                            minikube start --wait=all
-                        else
-                            echo "ERROR: Cluster is down and 'minikube' command not found. Please start your cluster manually."
-                            exit 1
-                        fi
-                    fi
-                '''
-                
-                echo "Deploying Gradify to Kubernetes..."
-                sh '''
-                    rm -rf /tmp/gradify-k8s-deploy
-                    mkdir -p /tmp/gradify-k8s-deploy
-                    cp k8s/*.yaml /tmp/gradify-k8s-deploy/
-                    cp k8s/lpg/*.yaml /tmp/gradify-k8s-deploy/
-                    kubectl apply -f /tmp/gradify-k8s-deploy/ --validate=false
-                '''
+                echo "Deploying Gradify using Ansible..."
+                withCredentials([string(credentialsId: 'ansible-vault-pass', variable: 'VAULT_PASS')]) {
+                    sh '''
+                        # Create a temporary password file for Ansible Vault
+                        echo "$VAULT_PASS" > .vault_pass.txt
+                        chmod 600 .vault_pass.txt
+                        
+                        # Run the Ansible playbook
+                        ansible-playbook ansible/deploy-k8s.yml --vault-password-file .vault_pass.txt
+                        
+                        # Clean up the password file
+                        rm .vault_pass.txt
+                    '''
+                }
             }
         }
     }
