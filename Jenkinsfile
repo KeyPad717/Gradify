@@ -19,7 +19,6 @@ pipeline {
                     echo "Starting Microservice Change Detection..."
                     def changedFiles = []
                     
-                    // 1. Collect all changed files from the changeset
                     currentBuild.changeSets.each { changeLogSet ->
                         changeLogSet.items.each { entry ->
                             entry.affectedFiles.each { file ->
@@ -31,14 +30,12 @@ pipeline {
                     }
                     
                     def allServices = ['admin-service', 'professor-service', 'student-service', 'user-service', 'api-gateway', 'stats-service', 'front-end']
-                    def changed = []
+                    def matchedServices = []
                     
-                    // 2. Identify manual vs automated builds
                     if (changedFiles.isEmpty()) {
-                        echo "No changesets found. Defaulting to FULL BUILD for all services."
-                        changed = allServices
+                        echo "No changesets found. Defaulting to FULL BUILD."
+                        matchedServices = allServices
                     } else {
-                        // Check for global config changes first
                         def hasGlobal = false
                         for (f in changedFiles) {
                             if (f == "Jenkinsfile" || f.startsWith("k8s/") || f.startsWith("ansible/") || !f.contains("/")) {
@@ -48,16 +45,14 @@ pipeline {
                         }
                         
                         if (hasGlobal) {
-                            echo "Global configuration change detected. Building ALL services."
-                            changed = allServices
+                            echo "Global change detected. Building ALL."
+                            matchedServices = allServices
                         } else {
-                            // Match files to service folders
                             for (svc in allServices) {
-                                echo "Checking if ${svc} needs building..."
                                 for (f in changedFiles) {
                                     if (f.startsWith(svc + "/")) {
-                                        echo "MATCH: ${f} belongs to ${svc}. Adding to build list."
-                                        changed.add(svc)
+                                        echo "MATCH FOUND: ${svc}"
+                                        matchedServices.add(svc)
                                         break
                                     }
                                 }
@@ -65,14 +60,24 @@ pipeline {
                         }
                     }
                     
-                    // 3. Finalize the build list
-                    if (changed.isEmpty() && !changedFiles.isEmpty()) {
-                        echo "Unknown changes detected. Falling back to FULL BUILD for safety."
-                        changed = allServices
+                    if (matchedServices.isEmpty() && !changedFiles.isEmpty()) {
+                        echo "Unknown changes. Falling back to FULL BUILD."
+                        matchedServices = allServices
                     }
                     
-                    env.SERVICES_TO_BUILD = changed.unique().join(',')
-                    echo "PIPELINE_PLAN: The following services will be processed: [${env.SERVICES_TO_BUILD}]"
+                    // Manually build the comma-separated string for maximum compatibility
+                    def uniqueList = matchedServices.unique()
+                    def finalString = ""
+                    for (int i = 0; i < uniqueList.size(); i++) {
+                        if (i == 0) {
+                            finalString = uniqueList[i]
+                        } else {
+                            finalString = finalString + "," + uniqueList[i]
+                        }
+                    }
+                    
+                    env.GRADIFY_BUILD_LIST = finalString
+                    echo "PIPELINE_PLAN: Services to process: [${env.GRADIFY_BUILD_LIST}]"
                 }
             }
         }
@@ -80,30 +85,25 @@ pipeline {
         stage('Unit Testing') {
             steps {
                 script {
-                    if (!env.SERVICES_TO_BUILD) {
-                        echo "No services identified for testing."
+                    if (!env.GRADIFY_BUILD_LIST) {
+                        echo "No services to test."
                         return
                     }
                     
-                    def services = env.SERVICES_TO_BUILD.split(',')
+                    def services = env.GRADIFY_BUILD_LIST.split(',')
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
                     for (svc in services) {
                         if (!svc) continue
-                        
                         if (javaServices.contains(svc)) {
                             dir(svc) {
-                                echo "Building JAR: ${svc} (Skipping tests)..."
+                                echo "Building JAR: ${svc}"
                                 sh './mvnw clean package -DskipTests=true'
                             }
                         } else if (svc == 'api-gateway' || svc == 'stats-service') {
-                            dir(svc) { 
-                                echo "Testing Go service: ${svc}"
-                                sh 'go test ./...' 
-                            }
+                            dir(svc) { sh 'go test ./...' }
                         } else if (svc == 'front-end') {
                             dir('front-end') {
-                                echo "Building Frontend Production Bundle..."
                                 sh 'npm install && npm run build'
                             }
                         }
@@ -115,14 +115,14 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    if (!env.SERVICES_TO_BUILD) return
-                    def services = env.SERVICES_TO_BUILD.split(',')
+                    if (!env.GRADIFY_BUILD_LIST) return
+                    def services = env.GRADIFY_BUILD_LIST.split(',')
                     def javaServices = ['admin-service', 'professor-service', 'student-service', 'user-service']
                     
                     for (svc in services) {
                         if (!svc) continue
                         dir(svc) {
-                            echo "Building Docker Image for: ${svc}"
+                            echo "Building Image: ${svc}"
                             if (javaServices.contains(svc)) {
                                 sh "cp target/*.jar app.jar || echo 'No jar found'"
                             }
@@ -140,12 +140,12 @@ pipeline {
                         sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
                     }
                     script {
-                        if (!env.SERVICES_TO_BUILD) return
-                        def services = env.SERVICES_TO_BUILD.split(',')
+                        if (!env.GRADIFY_BUILD_LIST) return
+                        def services = env.GRADIFY_BUILD_LIST.split(',')
                         
                         for (svc in services) {
                             if (!svc) continue
-                            echo "Pushing Image: ${svc} to DockerHub..."
+                            echo "Pushing: ${svc}"
                             retry(3) {
                                 sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                             }
