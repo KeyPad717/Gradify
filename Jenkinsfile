@@ -2,7 +2,7 @@ pipeline {
     agent any
     // commeny added for poll SCM
     environment {
-        DOCKERHUB_CRED = 'docker-hub-credentials'
+        DOCKERHUB_CRED = 'adityadave29-docker-creds'
         DOCKER_USER = 'adityadave29'
         EMAIL_RECIPIENT = 'daveadityan2004@gmail.com'
         PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
