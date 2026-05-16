@@ -1,4 +1,4 @@
-package com.example.admin_service;
+package com.example.professor_service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class AdminServiceApplicationTests {
+class ProfessorServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
@@ -18,5 +18,4 @@ class AdminServiceApplicationTests {
 	void simpleTest() {
 		assertTrue(true);
 	}
-
 }

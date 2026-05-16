@@ -97,14 +97,14 @@ pipeline {
                         if (!svc) continue
                         if (javaServices.contains(svc)) {
                             dir(svc) {
-                                echo "Building JAR: ${svc}"
-                                sh './mvnw clean package -DskipTests=true'
+                                echo "Running Java Tests and Building: ${svc}"
+                                sh './mvnw clean package'
                             }
                         } else if (svc == 'api-gateway' || svc == 'stats-service') {
-                            dir(svc) { sh 'go test ./...' }
+                            dir(svc) { sh 'go test -v ./...' }
                         } else if (svc == 'front-end') {
                             dir('front-end') {
-                                sh 'npm install && npm run build'
+                                sh 'npm install && npm test'
                             }
                         }
                     }
