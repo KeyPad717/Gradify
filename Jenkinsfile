@@ -77,6 +77,7 @@ pipeline {
                     }
                     
                     env.GRADIFY_BUILD_LIST = finalString
+                    env.CHANGED_SERVICES = finalString
                     echo "PIPELINE_PLAN: Services to process: [${env.GRADIFY_BUILD_LIST}]"
                 }
             }
