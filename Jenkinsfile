@@ -23,7 +23,7 @@ pipeline {
                         changeLogSet.items.each { entry ->
                             entry.affectedFiles.each { file ->
                                 def path = file.path.toString()
-                                echo "DEBUG-DETECTION: Detected file change: ${path}"
+                                echo "DEBUG-DETECTION-NEW: Detected file change: ${path}"
                                 changedFiles.add(path)
                             }
                         }
