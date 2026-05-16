@@ -14,7 +14,7 @@ function AdminHomePage() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-950 px-4 text-zinc-100">
       <h1 className="text-3xl font-semibold">Homepage</h1>
       {user?.email && (
-        <p className="text-sm text-zinc-400">Signed in as {user.email}</p>
+        <p className="text-sm text-zinc-400">Signed livePaching in as {user.email}</p>
       )}
       <button
         type="button"
