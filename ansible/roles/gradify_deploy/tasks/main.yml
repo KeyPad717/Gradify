@@ -1,0 +1,40 @@
+---
+- name: Ensure target deployment directory exists
+  file:
+    path: "{{ deploy_dir }}"
+    state: directory
+
+- name: Copy K8s manifests from repository
+  copy:
+    src: "{{ playbook_dir }}/../k8s/"
+    dest: "{{ deploy_dir }}/"
+
+- name: Copy LPG manifests
+  copy:
+    src: "{{ playbook_dir }}/../k8s/lpg/"
+    dest: "{{ deploy_dir }}/lpg/"
+
+- name: Inject Vault secrets into deployment (Simulated)
+  debug:
+    msg: "Ready to deploy with sensitive key starting with: {{ supabase_key[:10] }}..."
+
+- name: Apply Kubernetes manifests
+  command: kubectl apply -R -f "{{ deploy_dir }}/" --validate=false
+  register: kubectl_output
+  failed_when: kubectl_output.rc != 0
+
+- name: Force rollout for updated services
+  shell: |
+    IFS=',' read -ra ADDR <<< "{{ lookup('env', 'CHANGED_SERVICES') }}"
+    for svc in "${ADDR[@]}"; do
+      if [ -n "$svc" ]; then
+        echo "Restarting deployment $svc..."
+        kubectl rollout restart deployment/$svc || \
+        echo "Deployment $svc not found, skipping restart."
+      fi
+    done
+  ignore_errors: yes
+
+- name: Show kubectl output
+  debug:
+    var: kubectl_output.stdout_lines

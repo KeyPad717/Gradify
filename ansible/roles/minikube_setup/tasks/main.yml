@@ -1,0 +1,53 @@
+---
+- name: Check if Minikube is installed
+  command: which minikube
+  register: minikube_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Download Minikube if not installed
+  get_url:
+    url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    dest: /tmp/minikube
+    mode: '0755'
+  when: minikube_check.rc != 0
+
+- name: Install Minikube
+  command: install /tmp/minikube /usr/local/bin/minikube
+  become: yes
+  when: minikube_check.rc != 0
+
+- name: Verify Docker daemon is running
+  command: docker info
+  register: docker_info
+  failed_when: docker_info.rc != 0
+  changed_when: false
+
+- name: Ensure Minikube is running with Docker driver
+  command: >
+    minikube start
+    --driver=docker
+    --memory 4096
+    --cpus 2
+    --force
+    --extra-config=kubelet.image-gc-high-threshold=95
+  register: minikube_start_result
+  ignore_errors: yes
+
+- name: Delete and recreate Minikube ONLY if cluster is corrupted
+  block:
+    - name: Delete corrupted Minikube cluster
+      command: minikube delete
+
+    - name: Start Minikube fresh
+      command: >
+        minikube start
+        --driver=docker
+        --memory 4096
+        --cpus 2
+        --force
+        --extra-config=kubelet.image-gc-high-threshold=95
+
+  when:
+    - minikube_start_result.rc != 0
+    - "'K8S_APISERVER_MISSING' in minikube_start_result.stderr or 'recreate' in minikube_start_result.stderr"
