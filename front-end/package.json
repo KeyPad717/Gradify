@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "echo 'Running frontend smoke tests...' && ls src && echo 'Tests passed!'"
+    "test": "echo 'No frontend tests are configured yet.'"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
