@@ -180,17 +180,17 @@ pipeline {
         stage('Deploy with Ansible') {
             steps {
                 echo "Deploying Gradify using Ansible..."
-                sh '''
-                    # Create a temporary password file for Ansible Vault
-                    echo "1089" > .vault_pass.txt
-                    chmod 600 .vault_pass.txt
-                    
-                    # Run the Ansible playbook
-                    ansible-playbook ansible/deploy-k8s.yml --vault-password-file .vault_pass.txt
-                    
-                    # Clean up the password file
-                    rm .vault_pass.txt
-                '''
+                withCredentials([string(credentialsId: 'ansible-vault-pass', variable: 'VAULT_PASS')]) {
+                    sh '''
+                        # Create a temporary password file for Ansible Vault
+                        trap 'rm -f .vault_pass.txt' EXIT
+                        printf "%s" "$VAULT_PASS" > .vault_pass.txt
+                        chmod 600 .vault_pass.txt
+                        
+                        # Run the Ansible playbook
+                        ansible-playbook ansible/deploy-k8s.yml --vault-password-file .vault_pass.txt
+                    '''
+                }
             }
         }
     }
