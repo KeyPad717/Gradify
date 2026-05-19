@@ -83,6 +83,27 @@ pipeline {
             }
         }
 
+        stage('Environment Verification') {
+            steps {
+                echo "Cleaning up dangling images while preserving runtime volumes..."
+                sh 'docker image prune -f || true'
+                
+                script {
+                    echo "Checking available storage space..."
+                    // Get disk usage percentage of the root partition
+                    def dfOutput = sh(script: ''' df -h / | awk 'NR==2 {print $5}' | sed 's/%//' ''',returnStdout: true).trim()                    
+                    def usage = dfOutput.toInteger()
+                    echo "Current disk usage is at ${usage}%"
+                    
+                    if (usage > 95) {
+                        error("Disk usage is critically high (${usage}%). Failing pipeline to prevent system crash.")
+                    } else {
+                        echo "Disk usage is at ${usage}%. Proceeding with --force flags enabled."
+                    }
+                }
+            }
+        }
+
         stage('Unit Testing') {
             steps {
                 script {

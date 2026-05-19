@@ -1,5 +1,5 @@
 # We expect the JAR to be already built via Maven on the host (Jenkins workspace)
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
