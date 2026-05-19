@@ -1,6 +1,6 @@
 pipeline {
     agent any
-    // commeny added for poll SCM
+    // comment added for poll SCM
     environment {
         DOCKERHUB_CRED = 'docker-creds'
         DOCKER_USER = 'adityadave29'
