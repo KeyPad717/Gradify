@@ -9,11 +9,6 @@
     src: "{{ playbook_dir }}/../k8s/"
     dest: "{{ deploy_dir }}/"
 
-- name: Copy LPG manifests
-  copy:
-    src: "{{ playbook_dir }}/../k8s/lpg/"
-    dest: "{{ deploy_dir }}/lpg/"
-
 - name: Inject Vault secrets into deployment (Simulated)
   debug:
     msg: "Ready to deploy with sensitive key starting with: {{ supabase_key[:10] }}..."
