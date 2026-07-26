@@ -1,1 +1,36 @@
-app.jar
+
+# Java / Maven
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Node
+**/node_modules/
+**/dist/
+
+# Go
+*.exe
+*.test
+*.out
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Temp
+temp/
+tmp/

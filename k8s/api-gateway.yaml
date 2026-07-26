@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: adityadave29/api-gateway:latest 
-        imagePullPolicy: Always
+        image: key717/api-gateway:latest 
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         livenessProbe:

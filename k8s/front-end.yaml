@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
       - name: front-end
-        image: adityadave29/front-end:latest 
-        imagePullPolicy: Always
+        image: key717/front-end:latest 
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
         livenessProbe:

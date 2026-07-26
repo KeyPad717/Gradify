@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
       - name: professor-service
-        image: adityadave29/professor-service:latest
-        imagePullPolicy: Always
+        image: key717/professor-service:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8084
         livenessProbe:

@@ -1,8 +1,0 @@
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/ProfessorServiceApplication.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/controller/ProfessorController.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/model/Course.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/model/EvaluationComponent.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/model/GradeDistribution.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/model/Mark.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/model/StudentDTO.java
-/home/iiitb/Desktop/Gradify/professor-service/src/main/java/com/example/professor_service/service/ProfessorService.java

@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
       - name: stats-service
-        image: adityadave29/stats-service:latest  
-        imagePullPolicy: Always
+        image: key717/stats-service:latest  
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8086
         livenessProbe:

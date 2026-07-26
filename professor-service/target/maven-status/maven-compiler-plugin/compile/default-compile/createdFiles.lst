@@ -1,8 +1,0 @@
-com/example/professor_service/model/Course.class
-com/example/professor_service/model/StudentDTO.class
-com/example/professor_service/ProfessorServiceApplication.class
-com/example/professor_service/model/GradeDistribution.class
-com/example/professor_service/controller/ProfessorController.class
-com/example/professor_service/model/Mark.class
-com/example/professor_service/service/ProfessorService.class
-com/example/professor_service/model/EvaluationComponent.class
