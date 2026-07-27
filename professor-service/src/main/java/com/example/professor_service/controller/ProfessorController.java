@@ -6,9 +6,12 @@ import com.example.professor_service.model.GradeDistribution;
 import com.example.professor_service.model.Mark;
 import com.example.professor_service.model.StudentDTO;
 import com.example.professor_service.service.ProfessorService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/professor")
@@ -18,6 +21,12 @@ public class ProfessorController {
 
     public ProfessorController(ProfessorService professorService) {
         this.professorService = professorService;
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleValidationError(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(Map.of("error", "validation_failed", "message", e.getMessage()));
     }
 
     @GetMapping("/courses")

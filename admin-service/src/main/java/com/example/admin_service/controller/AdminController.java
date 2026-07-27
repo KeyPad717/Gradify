@@ -57,7 +57,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -92,7 +92,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -111,7 +111,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -148,7 +148,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -167,7 +167,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -186,7 +186,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -207,7 +207,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 
@@ -229,7 +229,7 @@ public class AdminController {
 		} catch (Exception e) {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
 					"error", "unexpected_admin_service_error",
-					"details", e.getClass().getSimpleName() + ": " + e.getMessage()));
+					"details", "An internal error occurred"));
 		}
 	}
 

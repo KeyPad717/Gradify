@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -10,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -22,26 +27,138 @@ type config struct {
 	studentService   *url.URL
 	statsService     *url.URL
 	allowedOrigin    []string
+	jwtSecret        string
+}
+
+type rateLimiter struct {
+	mu       sync.Mutex
+	clients  map[string]*clientLimit
+	rate     int
+	burst    int
+}
+
+type clientLimit struct {
+	tokens   int
+	lastTick time.Time
+}
+
+func newRateLimiter(rate, burst int) *rateLimiter {
+	return &rateLimiter{
+		clients: make(map[string]*clientLimit),
+		rate:    rate,
+		burst:   burst,
+	}
+}
+
+func (rl *rateLimiter) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cl, ok := rl.clients[ip]
+	if !ok {
+		cl = &clientLimit{tokens: rl.burst, lastTick: now}
+		rl.clients[ip] = cl
+	}
+
+	elapsed := now.Sub(cl.lastTick)
+	cl.lastTick = now
+	cl.tokens += int(elapsed.Seconds()) * rl.rate
+	if cl.tokens > rl.burst {
+		cl.tokens = rl.burst
+	}
+
+	if cl.tokens > 0 {
+		cl.tokens--
+		return true
+	}
+	return false
+}
+
+type jwtClaims struct {
+	Sub   string `json:"sub"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func validateToken(tokenString, secret string) (*jwtClaims, error) {
+	parts := strings.Split(tokenString, ".")
+	if len(parts) != 3 {
+		return nil, http.ErrNoLocation
+	}
+
+	signingInput := parts[0] + "." + parts[1]
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, err
+	}
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(signingInput))
+	expected := mac.Sum(nil)
+
+	if !hmac.Equal(sig, expected) {
+		return nil, http.ErrNoLocation
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	var claims jwtClaims
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, err
+	}
+
+	if claims.Sub == "" {
+		return nil, http.ErrNoLocation
+	}
+
+	return &claims, nil
 }
 
 func main() {
 	cfg := mustLoadConfig()
+	loginLimiter := newRateLimiter(5, 10)
+
+	cleanupTicker := time.NewTicker(5 * time.Minute)
+	go func() {
+		for range cleanupTicker.C {
+			loginLimiter.mu.Lock()
+			now := time.Now()
+			for ip, cl := range loginLimiter.clients {
+				if now.Sub(cl.lastTick) > 10*time.Minute {
+					delete(loginLimiter.clients, ip)
+				}
+			}
+			loginLimiter.mu.Unlock()
+		}
+	}()
 
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 
-	// Routes
-	mux.Handle("/api/auth/", withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.userService))))
-	mux.Handle("/api/admin/", withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.adminService))))
-	mux.Handle("/api/professor/", withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.professorService))))
-	mux.Handle("/api/student/", withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.studentService))))
-	mux.Handle("/api/stats/", withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.statsService))))
+	// Login endpoint: rate-limited, no JWT required
+	loginProxy := withRateLimit(loginLimiter, withRequestLogging(withCORS(cfg.allowedOrigin, reverseProxy(cfg.userService))))
+	mux.HandleFunc("POST /api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		loginProxy.ServeHTTP(w, r)
+	})
 
-	// Nice error for unknown routes (helps frontend debugging).
+	// Other auth endpoints require JWT
+	mux.Handle("/api/auth/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.userService)))))
+
+	// Protected service routes
+	mux.Handle("/api/admin/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.adminService)))))
+	mux.Handle("/api/professor/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.professorService)))))
+	mux.Handle("/api/student/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.studentService)))))
+	mux.Handle("/api/stats/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.statsService)))))
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -72,7 +189,6 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
@@ -84,6 +200,7 @@ func main() {
 
 func mustLoadConfig() config {
 	addr := envOr("GATEWAY_ADDR", ":8080")
+
 	userServiceURL := envOr("USER_SERVICE_URL", "http://localhost:8081")
 	u, err := url.Parse(userServiceURL)
 	if err != nil {
@@ -117,6 +234,8 @@ func mustLoadConfig() config {
 	allowed := envOr("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 	allowedOrigins := splitCSV(allowed)
 
+	jwtSecret := envOr("SUPABASE_JWT_SECRET", "")
+
 	return config{
 		addr:             addr,
 		userService:      u,
@@ -125,13 +244,13 @@ func mustLoadConfig() config {
 		studentService:   s,
 		statsService:     st,
 		allowedOrigin:    allowedOrigins,
+		jwtSecret:        jwtSecret,
 	}
 }
 
 func reverseProxy(target *url.URL) http.Handler {
 	p := httputil.NewSingleHostReverseProxy(target)
 
-	// Keep original Host in a header; set upstream Host to target.Host.
 	originalDirector := p.Director
 	p.Director = func(r *http.Request) {
 		originalHost := r.Host
@@ -147,9 +266,6 @@ func reverseProxy(target *url.URL) http.Handler {
 		_, _ = w.Write([]byte(`{"error":"bad_gateway"}`))
 	}
 
-	// Ensure the gateway is the single source of truth for CORS.
-	// If the upstream also adds CORS headers (e.g. Access-Control-Allow-Origin: *),
-	// browsers will reject responses with multiple values.
 	p.ModifyResponse = func(resp *http.Response) error {
 		resp.Header.Del("Access-Control-Allow-Origin")
 		resp.Header.Del("Access-Control-Allow-Credentials")
@@ -161,6 +277,66 @@ func reverseProxy(target *url.URL) http.Handler {
 	}
 
 	return p
+}
+
+func withAuth(secret string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if secret == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"missing_authorization_header"}`))
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"invalid_authorization_format"}`))
+			return
+		}
+
+		claims, err := validateToken(tokenString, secret)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"invalid_or_expired_token"}`))
+			return
+		}
+
+		r.Header.Set("X-User-Id", claims.Sub)
+		r.Header.Set("X-User-Email", claims.Email)
+		if claims.Role != "" {
+			r.Header.Set("X-User-Role", claims.Role)
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withRateLimit(rl *rateLimiter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if idx := strings.LastIndex(ip, ":"); idx != -1 {
+			ip = ip[:idx]
+		}
+
+		if !rl.allow(ip) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", "60")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"rate_limit_exceeded","retry_after_seconds":60}`))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withCORS(allowedOrigins []string, next http.Handler) http.Handler {

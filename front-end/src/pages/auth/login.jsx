@@ -19,17 +19,6 @@ function Login() {
       const response = await api.post('/api/auth/login', { email, password })
 
       const body = response.data
-      console.log('Login — full response:', body)
-      if (body && typeof body === 'object') {
-        console.log('Login — access_token:', body.access_token)
-        console.log('Login — refresh_token:', body.refresh_token)
-        console.log('Login — expires_in:', body.expires_in)
-        console.log('Login — token_type:', body.token_type)
-        console.log('Login — user:', body.user)
-        console.log('Login — role:', body.role)
-        console.log('Login — debug_version:', body.debug_version)
-      }
-
       saveSession(body)
       if (!isAuthenticated()) {
         setMessage(

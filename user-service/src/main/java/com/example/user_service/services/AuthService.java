@@ -1,15 +1,15 @@
 package com.example.user_service.services;
 import com.example.user_service.dto.LoginRequest;
-import com.example.user_service.dto.UserProfileUpdateRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -22,49 +22,8 @@ public class AuthService {
 
     private final RestTemplate restTemplate;  // ← injected
 
-    public AuthService(RestTemplate restTemplate) {  // ← constructor injection
+    public AuthService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
-    }
-    // public Map<String, Object> signup(LoginRequest request) {
-    //     String url = supabaseUrl + "/auth/v1/signup";
-    //
-    //     HttpHeaders headers = new HttpHeaders();
-    //     headers.setContentType(MediaType.APPLICATION_JSON);
-    //     headers.set("apikey", supabaseAnonKey);
-    //
-    //     HttpEntity<Map<String, String>> entity = new HttpEntity<>(
-    //             Map.of("email", request.getEmail(), "password", request.getPassword()),
-    //             headers
-    //     );
-    //
-    //     try {
-    //         ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-    //         return response.getBody();
-    //     } catch (HttpClientErrorException e) {
-    //         throw new RuntimeException("Failed to create user: " + e.getResponseBodyAsString());
-    //     }
-    // }
-
-    public Map<String, Object> updateUserProfile(UserProfileUpdateRequest request) {
-        String url = supabaseUrl + "/rest/v1/users";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("apikey", supabaseAnonKey);
-        headers.set("Authorization", "Bearer " + supabaseAnonKey);
-        headers.set("Prefer", "return=representation");
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(
-                Map.of("id", UUID.randomUUID().toString(), "email", request.getEmail(), "name", request.getName(), "role", request.getRole()),
-                headers
-        );
-
-        try {
-            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-            return Map.of("success", true, "message", "User profile updated successfully", "data", response.getBody());
-        } catch (HttpClientErrorException e) {
-            throw new RuntimeException("Failed to update user profile: " + e.getResponseBodyAsString());
-        }
     }
 
     public Map<String, Object> login(LoginRequest request) {
@@ -91,9 +50,8 @@ public class AuthService {
 
             String role = fetchRole(request.getEmail());
             result.put("role", role);
-            result.put("debug_version", "rbac-v2-force");
 
-            // Mirror role inside user metadata too for double-safety
+            // Mirror role inside user metadata
             if (result.get("user") instanceof Map userMap) {
                 Map<String, Object> userWithRole = new java.util.LinkedHashMap<>(userMap);
                 userWithRole.put("role", role);
@@ -107,7 +65,8 @@ public class AuthService {
     }
 
     private String fetchRole(String email) {
-        String url = supabaseUrl + "/rest/v1/users?email=eq." + email + "&select=role";
+        String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
+        String url = supabaseUrl + "/rest/v1/users?email=eq." + encodedEmail + "&select=role";
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("apikey", supabaseAnonKey);

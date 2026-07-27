@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -145,6 +146,11 @@ public class ProfessorService {
     }
 
     public EvaluationComponent addEvaluationComponent(EvaluationComponent component) {
+        Integer courseId = component.getCourseId();
+        if (courseId != null && component.getWeightage() != null) {
+            validateWeightageTotal(courseId, component.getWeightage(), null);
+        }
+
         String url = supabaseUrl + "/rest/v1/evaluation_components";
         String key = getEffectiveKey();
 
@@ -310,6 +316,17 @@ public class ProfessorService {
     }
 
     public List<EvaluationComponent> saveEvaluationComponentsBulk(List<EvaluationComponent> components) {
+        if (!components.isEmpty()) {
+            Integer courseId = components.get(0).getCourseId();
+            if (courseId != null) {
+                int addSum = components.stream()
+                    .filter(c -> c.getWeightage() != null)
+                    .mapToInt(EvaluationComponent::getWeightage)
+                    .sum();
+                validateWeightageTotal(courseId, addSum, null);
+            }
+        }
+
         String url = supabaseUrl + "/rest/v1/evaluation_components";
         String key = getEffectiveKey();
 
@@ -428,5 +445,21 @@ public class ProfessorService {
         return (supabaseServiceRoleKey != null && !supabaseServiceRoleKey.isBlank()) 
                ? supabaseServiceRoleKey 
                : supabaseAnonKey;
+    }
+
+    private void validateWeightageTotal(Integer courseId, Integer addWeightage, Integer excludeComponentId) {
+        List<EvaluationComponent> existing = getEvaluationComponents(courseId);
+        int existingSum = 0;
+        for (EvaluationComponent c : existing) {
+            if (c.getWeightage() != null && !Objects.equals(c.getId(), excludeComponentId)) {
+                existingSum += c.getWeightage();
+            }
+        }
+        int total = existingSum + (addWeightage != null ? addWeightage : 0);
+        if (total > 100) {
+            throw new IllegalArgumentException(
+                "Total weightage would exceed 100% (currently " + existingSum +
+                "%, adding " + addWeightage + "% = " + total + "%)");
+        }
     }
 }
