@@ -1,13 +1,12 @@
 pipeline {
     agent any
-    // commeny added for poll SCM
+
     environment {
-        DOCKERHUB_CRED = 'adityadave29-docker-creds'
-        DOCKER_USER = 'adityadave29'
-        EMAIL_RECIPIENT = 'daveadityan2004@gmail.com'
-        PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
-        
-        // This will store the list of services that actually changed
+        DOCKERHUB_CRED = credentials('gradify-dockerhub-creds')
+        DOCKER_USER = "${DOCKERHUB_CRED_USR}"
+        EMAIL_RECIPIENT = credentials('gradify-email-recipient')
+        PATH = "/usr/local/bin:/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+        IMAGE_TAG = "${env.GIT_COMMIT ?: 'latest'}"
         CHANGED_SERVICES = ""
         SERVICES_TO_BUILD = ""
     }
@@ -65,7 +64,6 @@ pipeline {
                         matchedServices = allServices
                     }
                     
-                    // Manually build the comma-separated string for maximum compatibility
                     def uniqueList = matchedServices.unique()
                     def finalString = ""
                     for (int i = 0; i < uniqueList.size(); i++) {
@@ -122,11 +120,12 @@ pipeline {
                     for (svc in services) {
                         if (!svc) continue
                         dir(svc) {
-                            echo "Building Image: ${svc}"
+                            echo "Building Image: ${svc}:${env.IMAGE_TAG}"
                             if (javaServices.contains(svc)) {
                                 sh "cp target/*.jar app.jar || echo 'No jar found'"
                             }
-                            sh "docker build -t ${env.DOCKER_USER}/${svc}:latest ."
+                            sh "docker build -t ${env.DOCKER_USER}/${svc}:${env.IMAGE_TAG} ."
+                            sh "docker tag ${env.DOCKER_USER}/${svc}:${env.IMAGE_TAG} ${env.DOCKER_USER}/${svc}:latest"
                         }
                     }
                 }
@@ -145,8 +144,9 @@ pipeline {
                         
                         for (svc in services) {
                             if (!svc) continue
-                            echo "Pushing: ${svc}"
+                            echo "Pushing: ${svc}:${env.IMAGE_TAG}"
                             retry(3) {
+                                sh "docker push ${env.DOCKER_USER}/${svc}:${env.IMAGE_TAG}"
                                 sh "docker push ${env.DOCKER_USER}/${svc}:latest"
                             }
                         }
@@ -158,17 +158,14 @@ pipeline {
         stage('Deploy with Ansible') {
             steps {
                 echo "Deploying Gradify using Ansible..."
-                sh '''
-                    # Create a temporary password file for Ansible Vault
-                    echo "1089" > .vault_pass.txt
-                    chmod 600 .vault_pass.txt
-                    
-                    # Run the Ansible playbook
-                    ansible-playbook ansible/deploy-k8s.yml --vault-password-file .vault_pass.txt
-                    
-                    # Clean up the password file
-                    rm .vault_pass.txt
-                '''
+                withCredentials([string(credentialsId: 'ansible-vault-password', variable: 'ANSIBLE_VAULT_PASS')]) {
+                    sh '''
+                        echo "$ANSIBLE_VAULT_PASS" > .vault_pass.txt
+                        chmod 600 .vault_pass.txt
+                        ansible-playbook ansible/deploy-k8s.yml --vault-password-file .vault_pass.txt
+                        rm .vault_pass.txt
+                    '''
+                }
             }
         }
     }

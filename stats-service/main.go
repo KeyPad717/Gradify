@@ -39,10 +39,8 @@ type ComponentStats struct {
 
 func main() {
 	port := envOr("PORT", "8086")
-	supabaseURL := envOr("SUPABASE_URL", "https://xeyuvlwepepvmenzwarq.supabase.co")
-	// Use the provided anon key as a default if none is in the environment
-	defaultKey := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhleXV2bHdlcGVwdm1lbnp3YXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDUxMjksImV4cCI6MjA4OTQ4MTEyOX0.Cn-Lt_VcF0sfiuwONXdqvzyGh16WHFcgB5s55darvUQ"
-	supabaseKey := envOr("SUPABASE_KEY", defaultKey)
+	supabaseURL := envOr("SUPABASE_URL", "")
+	supabaseKey := envOr("SUPABASE_KEY", "")
 
 	http.HandleFunc("/api/stats/courses/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

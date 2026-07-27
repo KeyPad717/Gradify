@@ -31,6 +31,13 @@ Thumbs.db
 .env
 .env.*
 
+# Secrets and config
+config
+.vault_pass.txt
+
 # Temp
 temp/
 tmp/
+
+# Ansible vault password
+ansible/.vault_pass*
