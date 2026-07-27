@@ -14,6 +14,8 @@
 *.exe
 *.test
 *.out
+api-gateway/api-gateway
+stats-service/stats-service
 
 # IDEs
 .idea/
