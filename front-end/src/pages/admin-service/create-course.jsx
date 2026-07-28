@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
+import { formatError } from '../../utils/formatError'
 
 function toDateTimeLocalValue(date = new Date()) {
   const pad = (value) => String(value).padStart(2, '0')
@@ -10,6 +11,7 @@ function toDateTimeLocalValue(date = new Date()) {
 }
 
 function CreateCourse() {
+  const navigate = useNavigate()
   const [professors, setProfessors] = useState([])
   const [professorId, setProfessorId] = useState('')
   const [courseCode, setCourseCode] = useState('')
@@ -30,11 +32,7 @@ function CreateCourse() {
           setProfessorId(String(list[0].id))
         }
       } catch (error) {
-        setMessage(
-          error.response?.data?.details ||
-            error.response?.data?.error ||
-            'Unable to load professors list'
-        )
+        setMessage(formatError(error, 'Unable to load professors list'))
       } finally {
         setLoadingProfessors(false)
       }
@@ -61,23 +59,9 @@ function CreateCourse() {
       setMessage('Course created successfully')
       setCourseCode('')
       setCourseName('')
+      setTimeout(() => navigate('/admin-service', { replace: true }), 600)
     } catch (error) {
-      const details = error.response?.data?.details
-      let parsedDetails = details
-      if (typeof details === 'string') {
-        try {
-          const json = JSON.parse(details)
-          parsedDetails = json?.msg || json?.message || details
-        } catch {
-          parsedDetails = details
-        }
-      }
-      setMessage(
-        parsedDetails ||
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Unable to create course'
-      )
+      setMessage(formatError(error, 'Unable to create course'))
     } finally {
       setLoading(false)
     }

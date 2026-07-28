@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
+import { formatError } from '../../utils/formatError'
 
 const ROLES = ['STUDENT', 'PROFESSOR']
 
@@ -41,22 +42,7 @@ function CreateUserDetails() {
       setMessage('User created successfully')
       setTimeout(() => navigate('/admin-service', { replace: true }), 600)
     } catch (error) {
-      const details = error.response?.data?.details
-      let parsedDetails = details
-      if (typeof details === 'string') {
-        try {
-          const json = JSON.parse(details)
-          parsedDetails = json?.msg || json?.message || details
-        } catch {
-          parsedDetails = details
-        }
-      }
-      setMessage(
-        parsedDetails ||
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Unable to create user'
-      )
+      setMessage(formatError(error, 'Unable to create user'))
       console.error(error)
     } finally {
       setLoading(false)

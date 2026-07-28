@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
+import { formatError } from '../../utils/formatError'
 
 function CreateUser() {
   const navigate = useNavigate()
@@ -19,22 +20,7 @@ function CreateUser() {
         state: { email, userId: response.data?.id || '' },
       })
     } catch (error) {
-      const details = error.response?.data?.details
-      let parsedDetails = details
-      if (typeof details === 'string') {
-        try {
-          const json = JSON.parse(details)
-          parsedDetails = json?.msg || json?.message || details
-        } catch {
-          parsedDetails = details
-        }
-      }
-      setMessage(
-        parsedDetails ||
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          'Unable to create auth user'
-      )
+      setMessage(formatError(error, 'Unable to create auth user'))
     } finally {
       setLoading(false)
     }

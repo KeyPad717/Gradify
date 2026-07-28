@@ -59,9 +59,8 @@ public class SupabaseAuthAdminService {
 		HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
 
 		try {
-			// Two-phase flow: create auth user first, then update mirrored public.users row.
-			// Mirror row creation can be slightly delayed, so retry update briefly.
-			for (int attempt = 1; attempt <= 8; attempt++) {
+			// Two-phase flow: attempt PATCH update on mirrored public.users row first.
+			for (int attempt = 1; attempt <= 3; attempt++) {
 				ResponseEntity<List> response = restTemplate.exchange(java.net.URI.create(url), HttpMethod.PATCH, entity, List.class);
 				List body = response.getBody();
 				if (body != null && !body.isEmpty()) {
@@ -69,11 +68,39 @@ public class SupabaseAuthAdminService {
 				}
 
 				try {
-					Thread.sleep(400);
+					Thread.sleep(200);
 				} catch (InterruptedException ie) {
 					Thread.currentThread().interrupt();
 					throw new IllegalStateException("profile_update_interrupted");
 				}
+			}
+
+			// If PATCH yields no updated row (public.users missing record), perform upsert/insert
+			String resolvedUserId = (userId != null && !userId.isBlank()) ? userId : fetchAuthUserIdByEmail(email);
+
+			String upsertUrl = supabaseUrl.replaceAll("/+$", "") + "/rest/v1/users";
+			HttpHeaders upsertHeaders = new HttpHeaders();
+			upsertHeaders.setContentType(MediaType.APPLICATION_JSON);
+			upsertHeaders.set("apikey", serviceRoleKey);
+			upsertHeaders.set("Authorization", "Bearer " + serviceRoleKey);
+			upsertHeaders.set("Prefer", "resolution=merge-duplicates,return=representation");
+
+			Map<String, Object> upsertPayload = new java.util.HashMap<>();
+			if (resolvedUserId != null && !resolvedUserId.isBlank()) {
+				upsertPayload.put("id", resolvedUserId);
+			}
+			upsertPayload.put("email", email);
+			upsertPayload.put("name", name);
+			upsertPayload.put("role", role);
+
+			ResponseEntity<List> upsertResponse = restTemplate.postForEntity(
+					java.net.URI.create(upsertUrl),
+					new HttpEntity<>(upsertPayload, upsertHeaders),
+					List.class);
+
+			List upsertBody = upsertResponse.getBody();
+			if (upsertBody != null && !upsertBody.isEmpty()) {
+				return;
 			}
 
 			throw new UserProfileNotFoundException("user_record_not_found_for_email");
@@ -82,6 +109,40 @@ public class SupabaseAuthAdminService {
 		} catch (RestClientResponseException e) {
 			throw new SupabaseAuthException(e.getStatusCode().value(), e.getResponseBodyAsString());
 		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private String fetchAuthUserIdByEmail(String email) {
+		String url = supabaseUrl.replaceAll("/+$", "") + "/auth/v1/admin/users";
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("apikey", serviceRoleKey);
+		headers.set("Authorization", "Bearer " + serviceRoleKey);
+
+		try {
+			ResponseEntity<Map> response = restTemplate.exchange(
+					java.net.URI.create(url),
+					HttpMethod.GET,
+					new HttpEntity<>(headers),
+					Map.class);
+
+			Map body = response.getBody();
+			if (body != null && body.get("users") instanceof List usersList) {
+				for (Object u : usersList) {
+					if (u instanceof Map userMap) {
+						Object userEmail = userMap.get("email");
+						if (userEmail != null && email.equalsIgnoreCase(userEmail.toString())) {
+							Object id = userMap.get("id");
+							if (id != null) {
+								return id.toString();
+							}
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			// Fallback silently if auth query fails
+		}
+		return null;
 	}
 
 	@SuppressWarnings("unchecked")

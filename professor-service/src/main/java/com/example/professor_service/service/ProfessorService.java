@@ -40,33 +40,34 @@ public class ProfessorService {
 
     public List<Course> getCoursesByProfessor(String professorId) {
         String url = supabaseUrl + "/rest/v1/courses?professor_id=eq." + professorId + "&select=*";
+        String key = getEffectiveKey();
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("apikey", supabaseAnonKey);
-        headers.set("Authorization", "Bearer " + supabaseAnonKey);
+        headers.set("apikey", key);
+        headers.set("Authorization", "Bearer " + key);
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<Course[]> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                Course[].class
-        );
+        try {
+            ResponseEntity<Course[]> response = restTemplate.exchange(
+                    java.net.URI.create(url),
+                    HttpMethod.GET,
+                    entity,
+                    Course[].class
+            );
 
-        if (response.getBody() != null) {
-            return Arrays.asList(response.getBody());
+            if (response.getBody() != null) {
+                return Arrays.asList(response.getBody());
+            }
+        } catch (HttpStatusCodeException e) {
+            System.err.println("Supabase Error (GET Courses): " + e.getResponseBodyAsString());
         }
         return List.of();
     }
 
     public List<StudentDTO> getEnrolledStudents(Integer courseId) {
         String url = supabaseUrl + "/rest/v1/enrollments?course_id=eq." + courseId + "&select=student:users(id,name,email)";
-
-        // Use service_role key if provided to bypass RLS, fallback to anon key
-        String key = (supabaseServiceRoleKey != null && !supabaseServiceRoleKey.isBlank()) 
-                     ? supabaseServiceRoleKey 
-                     : supabaseAnonKey;
+        String key = getEffectiveKey();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("apikey", key);
@@ -76,7 +77,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<Map[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.GET,
                     entity,
                     Map[].class
@@ -98,10 +99,7 @@ public class ProfessorService {
 
     public Course getCourseByCourseId(Integer courseId) {
         String url = supabaseUrl + "/rest/v1/courses?id=eq." + courseId + "&select=*";
-
-        String key = (supabaseServiceRoleKey != null && !supabaseServiceRoleKey.isBlank()) 
-                     ? supabaseServiceRoleKey 
-                     : supabaseAnonKey;
+        String key = getEffectiveKey();
 
         HttpHeaders headers = new HttpHeaders();
         headers.set("apikey", key);
@@ -109,15 +107,19 @@ public class ProfessorService {
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<Course[]> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                Course[].class
-        );
+        try {
+            ResponseEntity<Course[]> response = restTemplate.exchange(
+                    java.net.URI.create(url),
+                    HttpMethod.GET,
+                    entity,
+                    Course[].class
+            );
 
-        if (response.getBody() != null && response.getBody().length > 0) {
-            return response.getBody()[0];
+            if (response.getBody() != null && response.getBody().length > 0) {
+                return response.getBody()[0];
+            }
+        } catch (HttpStatusCodeException e) {
+            System.err.println("Supabase Error (GET Course by ID): " + e.getResponseBodyAsString());
         }
         return null;
     }
@@ -132,15 +134,19 @@ public class ProfessorService {
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<EvaluationComponent[]> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                EvaluationComponent[].class
-        );
+        try {
+            ResponseEntity<EvaluationComponent[]> response = restTemplate.exchange(
+                    java.net.URI.create(url),
+                    HttpMethod.GET,
+                    entity,
+                    EvaluationComponent[].class
+            );
 
-        if (response.getBody() != null) {
-            return Arrays.asList(response.getBody());
+            if (response.getBody() != null) {
+                return Arrays.asList(response.getBody());
+            }
+        } catch (HttpStatusCodeException e) {
+            System.err.println("Supabase Error (GET Evaluation Components): " + e.getResponseBodyAsString());
         }
         return List.of();
     }
@@ -163,7 +169,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<EvaluationComponent[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.POST,
                     entity,
                     EvaluationComponent[].class
@@ -192,7 +198,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<EvaluationComponent[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.PATCH,
                     entity,
                     EvaluationComponent[].class
@@ -220,7 +226,7 @@ public class ProfessorService {
 
         try {
             restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.DELETE,
                     entity,
                     Void.class
@@ -243,7 +249,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<Mark[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.GET,
                     entity,
                     Mark[].class
@@ -272,7 +278,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<Mark[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.POST,
                     entity,
                     Mark[].class
@@ -300,7 +306,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<Mark[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.GET,
                     entity,
                     Mark[].class
@@ -339,7 +345,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<EvaluationComponent[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.POST,
                     entity,
                     EvaluationComponent[].class
@@ -367,7 +373,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<GradeDistribution[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.GET,
                     entity,
                     GradeDistribution[].class
@@ -394,7 +400,7 @@ public class ProfessorService {
 
         try {
             restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.DELETE,
                     entity,
                     Void.class
@@ -425,7 +431,7 @@ public class ProfessorService {
 
         try {
             ResponseEntity<GradeDistribution[]> response = restTemplate.exchange(
-                    url,
+                    java.net.URI.create(url),
                     HttpMethod.POST,
                     entity,
                     GradeDistribution[].class

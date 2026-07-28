@@ -65,7 +65,7 @@ function Login() {
         className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8 shadow-2xl shadow-black/40"
       >
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Gradify SPE Demo</h1>
+          <h1 className="text-xl font-medium tracking-tight text-zinc-300">Sign In</h1>
         </div>
 
         <div className="mb-4">

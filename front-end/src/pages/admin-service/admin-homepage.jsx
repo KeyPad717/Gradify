@@ -40,8 +40,7 @@ function AdminHomepage() {
     <div className="min-h-screen bg-zinc-950 px-4 py-10 text-zinc-100">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-8">
       <div className="text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">Admin service</h1>
-        <p className="mt-2 text-sm text-zinc-400">Gateway: /api/admin/*</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Admin Service</h1>
       </div>
       {user?.email && (
         <p className="text-sm text-zinc-400">Signed in as {user.email}</p>
