@@ -2,11 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/hmac"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -28,13 +36,14 @@ type config struct {
 	statsService     *url.URL
 	allowedOrigin    []string
 	jwtSecret        string
+	supabaseURL      string
 }
 
 type rateLimiter struct {
-	mu       sync.Mutex
-	clients  map[string]*clientLimit
-	rate     int
-	burst    int
+	mu      sync.Mutex
+	clients map[string]*clientLimit
+	rate    int
+	burst   int
 }
 
 type clientLimit struct {
@@ -75,47 +84,282 @@ func (rl *rateLimiter) allow(ip string) bool {
 	return false
 }
 
+type jwkKey struct {
+	Kty string `json:"kty"`
+	Alg string `json:"alg"`
+	Use string `json:"use"`
+	Kid string `json:"kid"`
+	Crv string `json:"crv"`
+	X   string `json:"x"`
+	Y   string `json:"y"`
+	N   string `json:"n"`
+	E   string `json:"e"`
+}
+
+type jwksResponse struct {
+	Keys []jwkKey `json:"keys"`
+}
+
+type jwksCache struct {
+	mu        sync.RWMutex
+	keys      map[string]interface{}
+	fetchedAt time.Time
+}
+
+var globalJWKSCache = &jwksCache{
+	keys: make(map[string]interface{}),
+}
+
+func (c *jwksCache) getKey(supabaseURL, kid string) (interface{}, error) {
+	c.mu.RLock()
+	if time.Since(c.fetchedAt) < 10*time.Minute && len(c.keys) > 0 {
+		if k, ok := c.keys[kid]; ok {
+			c.mu.RUnlock()
+			return k, nil
+		}
+		if kid == "" {
+			for _, k := range c.keys {
+				c.mu.RUnlock()
+				return k, nil
+			}
+		}
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if time.Since(c.fetchedAt) < 10*time.Minute && len(c.keys) > 0 {
+		if k, ok := c.keys[kid]; ok {
+			return k, nil
+		}
+	}
+
+	if supabaseURL == "" {
+		return nil, errors.New("supabase URL not configured for JWKS lookup")
+	}
+
+	jwksURL := strings.TrimRight(supabaseURL, "/") + "/auth/v1/.well-known/jwks.json"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(jwksURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", jwksURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JWKS body: %w", err)
+	}
+
+	var jwks jwksResponse
+	if err := json.Unmarshal(body, &jwks); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWKS: %w", err)
+	}
+
+	newKeys := make(map[string]interface{})
+	for idx, k := range jwks.Keys {
+		pubKey, err := parseJWK(k)
+		if err != nil {
+			log.Printf("jwksCache: error parsing key %s: %v", k.Kid, err)
+			continue
+		}
+		if k.Kid != "" {
+			newKeys[k.Kid] = pubKey
+		}
+		newKeys[fmt.Sprintf("key_%d", idx)] = pubKey
+	}
+
+	c.keys = newKeys
+	c.fetchedAt = time.Now()
+
+	if kid != "" {
+		if k, ok := c.keys[kid]; ok {
+			return k, nil
+		}
+	}
+	if len(c.keys) > 0 {
+		for _, k := range c.keys {
+			return k, nil
+		}
+	}
+
+	return nil, fmt.Errorf("key with kid %q not found in JWKS", kid)
+}
+
+func parseJWK(k jwkKey) (interface{}, error) {
+	if k.Kty == "EC" {
+		xBytes, err := decodeB64URL(k.X)
+		if err != nil {
+			return nil, err
+		}
+		yBytes, err := decodeB64URL(k.Y)
+		if err != nil {
+			return nil, err
+		}
+		return &ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(xBytes),
+			Y:     new(big.Int).SetBytes(yBytes),
+		}, nil
+	} else if k.Kty == "RSA" {
+		nBytes, err := decodeB64URL(k.N)
+		if err != nil {
+			return nil, err
+		}
+		eBytes, err := decodeB64URL(k.E)
+		if err != nil {
+			return nil, err
+		}
+		eInt := 0
+		for _, b := range eBytes {
+			eInt = (eInt << 8) | int(b)
+		}
+		return &rsa.PublicKey{
+			N: new(big.Int).SetBytes(nBytes),
+			E: eInt,
+		}, nil
+	}
+	return nil, fmt.Errorf("unsupported JWK kty: %s", k.Kty)
+}
+
+func decodeB64URL(s string) ([]byte, error) {
+	s = strings.TrimRight(s, "=")
+	return base64.RawURLEncoding.DecodeString(s)
+}
+
+type jwtHeader struct {
+	Alg string `json:"alg"`
+	Kid string `json:"kid"`
+	Typ string `json:"typ"`
+}
+
 type jwtClaims struct {
-	Sub   string `json:"sub"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Sub          string `json:"sub"`
+	Email        string `json:"email"`
+	Role         string `json:"role"`
+	Exp          int64  `json:"exp"`
+	UserMetadata struct {
+		Role string `json:"role"`
+	} `json:"user_metadata"`
+	AppMetadata struct {
+		Role string `json:"role"`
+	} `json:"app_metadata"`
 }
 
 func validateToken(tokenString, secret string) (*jwtClaims, error) {
+	return validateTokenWithURL(tokenString, secret, os.Getenv("SUPABASE_URL"))
+}
+
+func validateTokenWithURL(tokenString, secret, supabaseURL string) (*jwtClaims, error) {
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
+		log.Printf("validateToken: expected 3 parts, got %d", len(parts))
 		return nil, http.ErrNoLocation
 	}
 
-	signingInput := parts[0] + "." + parts[1]
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	headerBytes, err := decodeB64URL(parts[0])
 	if err != nil {
+		log.Printf("validateToken: base64 decode header: %v", err)
 		return nil, err
 	}
 
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(signingInput))
-	expected := mac.Sum(nil)
+	var header jwtHeader
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
+		log.Printf("validateToken: JSON unmarshal header: %v", err)
+		return nil, err
+	}
 
-	if !hmac.Equal(sig, expected) {
+	signingInput := parts[0] + "." + parts[1]
+	sigBytes, err := decodeB64URL(parts[2])
+	if err != nil {
+		log.Printf("validateToken: base64 decode signature: %v", err)
+		return nil, err
+	}
+
+	alg := strings.ToUpper(header.Alg)
+	if alg == "" || alg == "HS256" {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(signingInput))
+		expected := mac.Sum(nil)
+
+		if !hmac.Equal(sigBytes, expected) {
+			log.Printf("validateToken: HMAC mismatch (sig len=%d, expected len=%d)", len(sigBytes), len(expected))
+			return nil, http.ErrNoLocation
+		}
+	} else if alg == "ES256" {
+		pubKey, err := globalJWKSCache.getKey(supabaseURL, header.Kid)
+		if err != nil {
+			log.Printf("validateToken: JWKS key lookup failed: %v", err)
+			return nil, err
+		}
+		ecKey, ok := pubKey.(*ecdsa.PublicKey)
+		if !ok {
+			log.Printf("validateToken: key is not ECDSA public key")
+			return nil, http.ErrNoLocation
+		}
+		if !verifyES256(ecKey, signingInput, sigBytes) {
+			log.Printf("validateToken: ES256 signature verification failed")
+			return nil, http.ErrNoLocation
+		}
+	} else if alg == "RS256" {
+		pubKey, err := globalJWKSCache.getKey(supabaseURL, header.Kid)
+		if err != nil {
+			log.Printf("validateToken: JWKS key lookup failed: %v", err)
+			return nil, err
+		}
+		rsaKey, ok := pubKey.(*rsa.PublicKey)
+		if !ok {
+			log.Printf("validateToken: key is not RSA public key")
+			return nil, http.ErrNoLocation
+		}
+		hash := sha256.Sum256([]byte(signingInput))
+		if err := rsa.VerifyPKCS1v15(rsaKey, crypto.SHA256, hash[:], sigBytes); err != nil {
+			log.Printf("validateToken: RS256 signature verification failed: %v", err)
+			return nil, err
+		}
+	} else {
+		log.Printf("validateToken: unsupported algorithm %s", header.Alg)
 		return nil, http.ErrNoLocation
 	}
 
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	payload, err := decodeB64URL(parts[1])
 	if err != nil {
+		log.Printf("validateToken: base64 decode payload: %v", err)
 		return nil, err
 	}
 
 	var claims jwtClaims
 	if err := json.Unmarshal(payload, &claims); err != nil {
+		log.Printf("validateToken: JSON unmarshal payload: %v", err)
 		return nil, err
 	}
 
+	if claims.Exp > 0 && time.Now().Unix() > claims.Exp {
+		log.Printf("validateToken: token expired at %d", claims.Exp)
+		return nil, http.ErrNoLocation
+	}
+
 	if claims.Sub == "" {
+		log.Printf("validateToken: empty sub claim")
 		return nil, http.ErrNoLocation
 	}
 
 	return &claims, nil
+}
+
+func verifyES256(pubKey *ecdsa.PublicKey, signingInput string, sigBytes []byte) bool {
+	if len(sigBytes) != 64 {
+		return false
+	}
+	r := new(big.Int).SetBytes(sigBytes[:32])
+	s := new(big.Int).SetBytes(sigBytes[32:])
+	hash := sha256.Sum256([]byte(signingInput))
+	return ecdsa.Verify(pubKey, hash[:], r, s)
 }
 
 func main() {
@@ -151,13 +395,13 @@ func main() {
 	})
 
 	// Other auth endpoints require JWT
-	mux.Handle("/api/auth/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.userService)))))
+	mux.Handle("/api/auth/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuthWithURL(cfg.jwtSecret, cfg.supabaseURL, reverseProxy(cfg.userService)))))
 
 	// Protected service routes
-	mux.Handle("/api/admin/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.adminService)))))
-	mux.Handle("/api/professor/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.professorService)))))
-	mux.Handle("/api/student/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.studentService)))))
-	mux.Handle("/api/stats/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuth(cfg.jwtSecret, reverseProxy(cfg.statsService)))))
+	mux.Handle("/api/admin/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuthWithURL(cfg.jwtSecret, cfg.supabaseURL, reverseProxy(cfg.adminService)))))
+	mux.Handle("/api/professor/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuthWithURL(cfg.jwtSecret, cfg.supabaseURL, reverseProxy(cfg.professorService)))))
+	mux.Handle("/api/student/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuthWithURL(cfg.jwtSecret, cfg.supabaseURL, reverseProxy(cfg.studentService)))))
+	mux.Handle("/api/stats/", withRequestLogging(withCORS(cfg.allowedOrigin, withAuthWithURL(cfg.jwtSecret, cfg.supabaseURL, reverseProxy(cfg.statsService)))))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -235,6 +479,7 @@ func mustLoadConfig() config {
 	allowedOrigins := splitCSV(allowed)
 
 	jwtSecret := envOr("SUPABASE_JWT_SECRET", "")
+	supabaseURL := envOr("SUPABASE_URL", "")
 
 	return config{
 		addr:             addr,
@@ -245,6 +490,7 @@ func mustLoadConfig() config {
 		statsService:     st,
 		allowedOrigin:    allowedOrigins,
 		jwtSecret:        jwtSecret,
+		supabaseURL:      supabaseURL,
 	}
 }
 
@@ -280,8 +526,12 @@ func reverseProxy(target *url.URL) http.Handler {
 }
 
 func withAuth(secret string, next http.Handler) http.Handler {
+	return withAuthWithURL(secret, os.Getenv("SUPABASE_URL"), next)
+}
+
+func withAuthWithURL(secret, supabaseURL string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if secret == "" {
+		if secret == "" && supabaseURL == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -302,8 +552,13 @@ func withAuth(secret string, next http.Handler) http.Handler {
 			return
 		}
 
-		claims, err := validateToken(tokenString, secret)
+		claims, err := validateTokenWithURL(tokenString, secret, supabaseURL)
 		if err != nil {
+			prefix := tokenString
+			if len(prefix) > 30 {
+				prefix = prefix[:30]
+			}
+			log.Printf("withAuth: token validation failed: %v (token prefix: %s...)", err, prefix)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"error":"invalid_or_expired_token"}`))
@@ -312,8 +567,15 @@ func withAuth(secret string, next http.Handler) http.Handler {
 
 		r.Header.Set("X-User-Id", claims.Sub)
 		r.Header.Set("X-User-Email", claims.Email)
-		if claims.Role != "" {
-			r.Header.Set("X-User-Role", claims.Role)
+
+		role := claims.Role
+		if claims.UserMetadata.Role != "" {
+			role = claims.UserMetadata.Role
+		} else if claims.AppMetadata.Role != "" {
+			role = claims.AppMetadata.Role
+		}
+		if role != "" {
+			r.Header.Set("X-User-Role", role)
 		}
 
 		next.ServeHTTP(w, r)

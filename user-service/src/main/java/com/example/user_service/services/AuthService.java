@@ -20,6 +20,9 @@ public class AuthService {
     @Value("${supabase.anon.key}")
     private String supabaseAnonKey;
 
+    @Value("${supabase.service_role.key:}")
+    private String supabaseServiceRoleKey;
+
     private final RestTemplate restTemplate;  // ← injected
 
     public AuthService(RestTemplate restTemplate) {
@@ -48,7 +51,12 @@ public class AuthService {
                 result.putAll(originalBody);
             }
 
-            String role = fetchRole(request.getEmail());
+            String accessToken = null;
+            if (result.get("access_token") instanceof String tok) {
+                accessToken = tok;
+            }
+
+            String role = fetchRole(request.getEmail(), accessToken);
             result.put("role", role);
 
             // Mirror role inside user metadata
@@ -64,17 +72,26 @@ public class AuthService {
         }
     }
 
-    private String fetchRole(String email) {
+    private String fetchRole(String email, String accessToken) {
         String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
-        String url = supabaseUrl + "/rest/v1/users?email=eq." + encodedEmail + "&select=role";
+        String rawUrl = supabaseUrl + "/rest/v1/users?email=eq." + encodedEmail + "&select=role";
+        java.net.URI uri = java.net.URI.create(rawUrl);
+
+        String keyToUse = (supabaseServiceRoleKey != null && !supabaseServiceRoleKey.isBlank()) 
+                ? supabaseServiceRoleKey 
+                : supabaseAnonKey;
+
+        String bearerToken = (supabaseServiceRoleKey != null && !supabaseServiceRoleKey.isBlank()) 
+                ? supabaseServiceRoleKey 
+                : (accessToken != null && !accessToken.isBlank() ? accessToken : supabaseAnonKey);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("apikey", supabaseAnonKey);
-        headers.set("Authorization", "Bearer " + supabaseAnonKey);
+        headers.set("apikey", keyToUse);
+        headers.set("Authorization", "Bearer " + bearerToken);
 
         try {
             ResponseEntity<List> dbResponse = restTemplate.exchange(
-                    url,
+                    uri,
                     HttpMethod.GET,
                     new HttpEntity<>(headers),
                     List.class
@@ -82,10 +99,13 @@ public class AuthService {
 
             List<Map<String, Object>> rows = dbResponse.getBody();
             if (rows != null && !rows.isEmpty()) {
-                return (String) rows.get(0).get("role");
+                Object r = rows.get(0).get("role");
+                if (r != null) {
+                    return r.toString();
+                }
             }
         } catch (Exception e) {
-            // Log or handle error
+            // Log error
         }
         return "STUDENT"; // Default fallback
     }

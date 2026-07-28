@@ -40,7 +40,7 @@ type ComponentStats struct {
 func main() {
 	port := envOr("PORT", "8086")
 	supabaseURL := envOr("SUPABASE_URL", "")
-	supabaseKey := envOr("SUPABASE_KEY", "")
+	supabaseKey := envOr("SUPABASE_KEY", envOr("SUPABASE_ANON_KEY", envOr("SUPABASE_SERVICE_ROLE_KEY", "")))
 
 	http.HandleFunc("/api/stats/courses/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

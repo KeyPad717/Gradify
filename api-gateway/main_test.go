@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -404,5 +407,74 @@ func TestHealthEndpoint(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &body)
 	if !body["ok"] {
 		t.Fatal("expected ok:true")
+	}
+}
+
+func TestValidateTokenES256(t *testing.T) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	xB64 := base64.RawURLEncoding.EncodeToString(privateKey.X.Bytes())
+	yB64 := base64.RawURLEncoding.EncodeToString(privateKey.Y.Bytes())
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := jwksResponse{
+			Keys: []jwkKey{
+				{
+					Kty: "EC",
+					Alg: "ES256",
+					Kid: "test-kid-1",
+					Crv: "P-256",
+					X:   xB64,
+					Y:   yB64,
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	header := `{"alg":"ES256","kid":"test-kid-1","typ":"JWT"}`
+	payloadMap := map[string]interface{}{
+		"sub":   "es256user",
+		"email": "es256@test.com",
+		"role":  "PROFESSOR",
+		"exp":   time.Now().Add(1 * time.Hour).Unix(),
+	}
+	payloadBytes, _ := json.Marshal(payloadMap)
+
+	encHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
+	encPayload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signingInput := encHeader + "." + encPayload
+
+	hash := sha256.Sum256([]byte(signingInput))
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+	sigBytes := make([]byte, 64)
+	copy(sigBytes[32-len(rBytes):32], rBytes)
+	copy(sigBytes[64-len(sBytes):64], sBytes)
+
+	tokenString := signingInput + "." + base64.RawURLEncoding.EncodeToString(sigBytes)
+
+	claims, err := validateTokenWithURL(tokenString, "", ts.URL)
+	if err != nil {
+		t.Fatalf("expected valid ES256 token, got error: %v", err)
+	}
+	if claims.Sub != "es256user" {
+		t.Fatalf("expected sub=es256user, got %s", claims.Sub)
+	}
+	if claims.Email != "es256@test.com" {
+		t.Fatalf("expected email=es256@test.com, got %s", claims.Email)
+	}
+	if claims.Role != "PROFESSOR" {
+		t.Fatalf("expected role=PROFESSOR, got %s", claims.Role)
 	}
 }

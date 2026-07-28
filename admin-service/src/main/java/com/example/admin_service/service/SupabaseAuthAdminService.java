@@ -62,7 +62,7 @@ public class SupabaseAuthAdminService {
 			// Two-phase flow: create auth user first, then update mirrored public.users row.
 			// Mirror row creation can be slightly delayed, so retry update briefly.
 			for (int attempt = 1; attempt <= 8; attempt++) {
-				ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.PATCH, entity, List.class);
+				ResponseEntity<List> response = restTemplate.exchange(java.net.URI.create(url), HttpMethod.PATCH, entity, List.class);
 				List body = response.getBody();
 				if (body != null && !body.isEmpty()) {
 					return;
@@ -331,7 +331,7 @@ public class SupabaseAuthAdminService {
 		headers.set("Authorization", "Bearer " + serviceRoleKey);
 
 		try {
-			restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<>(headers), String.class);
+			restTemplate.exchange(java.net.URI.create(url), HttpMethod.DELETE, new HttpEntity<>(headers), String.class);
 		} catch (HttpClientErrorException e) {
 			throw new SupabaseAuthException(e.getStatusCode().value(), e.getResponseBodyAsString());
 		} catch (RestClientResponseException e) {
