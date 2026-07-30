@@ -1,21 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock localStorage before importing auth modules
-const localStorageMock = (() => {
-  let store = {}
-  return {
-    getItem: vi.fn((key) => store[key] ?? null),
-    setItem: vi.fn((key, value) => { store[key] = String(value) }),
-    removeItem: vi.fn((key) => { delete store[key] }),
-    clear: vi.fn(() => { store = {} }),
-  }
-})()
-
-Object.defineProperty(window, 'localStorage', { value: localStorageMock })
-
 describe('authStorage', () => {
-  beforeEach(() => {
-    localStorageMock.clear()
+  beforeEach(async () => {
+    const { clearSession } = await import('../pages/auth/authStorage')
+    clearSession()
   })
 
   it('should save and retrieve session', async () => {
@@ -67,5 +55,25 @@ describe('authStorage', () => {
 
     expect(getAccessToken()).toBeNull()
     expect(getUserRole()).toBeNull()
+  })
+
+  it('should persist only a session marker in localStorage', async () => {
+    const { saveSession, clearSession } = await import('../pages/auth/authStorage')
+
+    saveSession({
+      access_token: 'token123',
+      refresh_token: 'refresh123',
+      expires_in: 3600,
+      user: { id: 'u1' },
+      role: 'STUDENT',
+    })
+
+    expect(localStorage.getItem('gradify_logged_in')).toBe('true')
+    expect(localStorage.getItem('gradify_access_token')).toBeNull()
+    expect(localStorage.getItem('gradify_refresh_token')).toBeNull()
+    expect(localStorage.getItem('gradify_token_expires_at')).toBeNull()
+
+    clearSession()
+    expect(localStorage.getItem('gradify_logged_in')).toBeNull()
   })
 })

@@ -2,6 +2,7 @@ package com.example.user_service.controller;
 
 import com.example.user_service.dto.LoginRequest;
 import com.example.user_service.services.AuthService;
+import com.example.user_service.services.RoleResolutionException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -52,5 +53,33 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid email or password."));
+    }
+
+    @Test
+    void login_roleLookupEmptyRows_shouldReturn401() throws Exception {
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new RuntimeException("Unable to verify account role. Please try again."));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "norole@test.com", "password": "pass123"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unable to verify account role. Please try again."));
+    }
+
+    @Test
+    void login_roleLookupException_shouldReturn401() throws Exception {
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new RuntimeException("Unable to verify account role. Please try again."));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "error@test.com", "password": "pass123"}
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unable to verify account role. Please try again."));
     }
 }

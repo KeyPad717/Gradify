@@ -1,37 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('../pages/auth/authStorage', () => ({
+  getAccessToken: vi.fn(),
+}))
+
 describe('API Client', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.resetModules()
   })
 
   it('should attach auth token to requests', async () => {
-    const store = { 'gradify_access_token': 'test-token' }
-    Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: vi.fn((key) => store[key] ?? null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-      },
-      configurable: true,
-    })
+    const authStorage = await import('../pages/auth/authStorage')
+    authStorage.getAccessToken.mockReturnValue('test-token')
 
     const { api } = await import('../api/client')
     expect(api.defaults.headers).toBeDefined()
   })
 
   it('should not attach token when not logged in', async () => {
-    const store = {}
-    Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: vi.fn((key) => store[key] ?? null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-      },
-      configurable: true,
-    })
+    const authStorage = await import('../pages/auth/authStorage')
+    authStorage.getAccessToken.mockReturnValue(null)
 
     const { api } = await import('../api/client')
     expect(api.defaults.headers).toBeDefined()

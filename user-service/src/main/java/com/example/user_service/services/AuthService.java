@@ -1,5 +1,7 @@
 package com.example.user_service.services;
 import com.example.user_service.dto.LoginRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     @Value("${supabase.url}")
     private String supabaseUrl;
@@ -69,6 +73,8 @@ public class AuthService {
             return result;
         } catch (HttpClientErrorException e) {
             throw new RuntimeException("Invalid email or password.");
+        } catch (RoleResolutionException e) {
+            throw new RuntimeException("Unable to verify account role. Please try again.");
         }
     }
 
@@ -104,9 +110,13 @@ public class AuthService {
                     return r.toString();
                 }
             }
+            log.error("Role lookup returned no rows for email={}", email);
+            throw new RoleResolutionException("No role found for user: " + email);
+        } catch (RoleResolutionException e) {
+            throw e;
         } catch (Exception e) {
-            // Log error
+            log.error("Role lookup failed for email={}: {}", email, e.getMessage(), e);
+            throw new RoleResolutionException("Unable to verify account role. Please try again.", e);
         }
-        return "STUDENT"; // Default fallback
     }
 }
