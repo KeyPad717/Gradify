@@ -36,6 +36,9 @@ spec:
             port: 80
           initialDelaySeconds: 5
           periodSeconds: 10
+        envFrom:
+        - secretRef:
+            name: gradify-secrets
         resources:
           requests:
             cpu: "50m"

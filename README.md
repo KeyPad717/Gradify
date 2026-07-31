@@ -145,6 +145,29 @@ docker run -p 8081:8081 user-service
 
 ---
 
+## Kubernetes deployment (`k8s/`)
+
+Deployments pull image tags injected by the pipeline (the Git commit SHA, e.g. `key717/user-service:<sha>`) so each deploy is reproducible. Secrets never live in the repo or in manifests — they are injected at runtime from one shared in-cluster Secret.
+
+**One-time setup** (on the cluster, before first `kubectl apply`):
+
+```bash
+kubectl create secret generic gradify-secrets --from-env-file=.env
+```
+
+Every deployment references it via `envFrom`, so the Supabase credentials
+(`SUPABASE_DB_HOST`, `SUPABASE_DB_USER`, `SUPABASE_DB_PASSWORD`, `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are available to all services.
+
+**Deploy flow**: Jenkins builds and pushes each service as `key717/<svc>:${GIT_COMMIT}`.
+The Ansible deploy (`ansible/deploy-k8s.yml`, role `gradify_deploy`) substitutes that tag
+into the copied manifests for the services built in that run only (from
+`GRADIFY_BUILD_LIST`) before `kubectl apply -R`, so a changed tag triggers a normal
+rolling update — no `:latest` staleness, no phantom rollouts of untouched services,
+no manual restarts.
+
+---
+
 ## Containerization strategy
 
 - Add **Dockerfiles per service** as each service stabilizes; wire them together with **Compose** when multiple services are ready.

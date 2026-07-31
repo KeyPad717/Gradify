@@ -8,6 +8,8 @@
 
   vars:
     deploy_dir: /tmp/gradify-k8s-deploy
+    image_tag: "{{ lookup('env', 'GIT_COMMIT') | default('latest', true) }}"
+    build_services: "{{ (lookup('env', 'GRADIFY_BUILD_LIST') | default('', true) | split(',')) | reject('equalto', '') | list }}"
 
   roles:
     - role: minikube_setup

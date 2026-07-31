@@ -51,6 +51,9 @@ spec:
           value: "http://student-service:8085"
         - name: STATS_SERVICE_URL
           value: "http://stats-service:8086"
+        envFrom:
+        - secretRef:
+            name: gradify-secrets
         resources:
           requests:
             cpu: "50m"

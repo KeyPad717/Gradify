@@ -40,6 +40,9 @@ spec:
             port: 8086
           failureThreshold: 12
           periodSeconds: 10
+        envFrom:
+        - secretRef:
+            name: gradify-secrets
         resources:
           requests:
             cpu: "50m"

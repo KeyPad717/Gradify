@@ -14,9 +14,12 @@
     src: "{{ playbook_dir }}/../k8s/elk/"
     dest: "{{ deploy_dir }}/elk/"
 
-- name: Inject Vault secrets into deployment (Simulated)
-  debug:
-    msg: "Ready to deploy with sensitive key starting with: {{ supabase_key[:10] }}..."
+- name: Inject Git commit image tag into manifests
+  replace:
+    path: "{{ deploy_dir }}/{{ item }}.yaml"
+    regexp: 'image: key717/{{ item }}:latest\s*'
+    replace: 'image: key717/{{ item }}:{{ image_tag }}'
+  loop: "{{ build_services }}"
 
 - name: Apply Kubernetes manifests
   command: kubectl apply -R -f "{{ deploy_dir }}/" --validate=false
@@ -25,7 +28,7 @@
 
 - name: Force rollout for updated services
   shell: |
-    IFS=',' read -ra ADDR <<< "{{ lookup('env', 'CHANGED_SERVICES') }}"
+    IFS=',' read -ra ADDR <<< "{{ lookup('env', 'GRADIFY_BUILD_LIST') }}"
     for svc in "${ADDR[@]}"; do
       if [ -n "$svc" ]; then
         echo "Restarting deployment $svc..."
