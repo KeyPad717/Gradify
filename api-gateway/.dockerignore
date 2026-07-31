@@ -2,3 +2,5 @@ api-gateway
 .idea/
 .vscode/
 .git/
+
+*.test

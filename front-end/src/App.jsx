@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Login from './pages/auth/login'
-import AdminHomePage from './pages/admin/AdminHomePage'
 import AdminHomepage from './pages/admin-service/admin-homepage'
 import CreateUser from './pages/admin-service/create-user'
 import CreateUserDetails from './pages/admin-service/create-user-details'
@@ -41,14 +40,6 @@ function App() {
             <GuestOnly>
               <Login />
             </GuestOnly>
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            <RequireAuth allowedRole="ADMIN">
-              <AdminHomePage />
-            </RequireAuth>
           }
         />
         <Route
