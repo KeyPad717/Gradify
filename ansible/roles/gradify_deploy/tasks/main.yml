@@ -14,17 +14,27 @@
     src: "{{ playbook_dir }}/../k8s/elk/"
     dest: "{{ deploy_dir }}/elk/"
 
-- name: Inject Git commit image tag into manifests
+- name: Inject Git commit image tag for services rebuilt this run
   replace:
     path: "{{ deploy_dir }}/{{ item }}.yaml"
     regexp: 'image: key717/{{ item }}:latest\s*'
-    replace: 'image: key717/{{ item }}:{{ image_tag }}'
+    replace: "image: key717/{{ item }}:{{ image_tag }}"
   loop: "{{ build_services }}"
 
-- name: Apply Kubernetes manifests
-  command: kubectl apply -R -f "{{ deploy_dir }}/" --validate=false
+# Only touch manifests for services actually rebuilt & pushed this run.
+# Applying the untouched services' manifests too would overwrite their
+# currently-running (working) image tag with this run's Git SHA, even though
+# no image was ever built/pushed under that SHA for them -> ImagePullBackOff.
+- name: Apply manifests for services rebuilt this run
+  command: kubectl apply -f "{{ deploy_dir }}/{{ item }}.yaml" --validate=false
+  loop: "{{ build_services }}"
   register: kubectl_output
-  failed_when: kubectl_output.rc != 0
+
+- name: Apply shared manifests (ingress)
+  command: kubectl apply -f "{{ deploy_dir }}/ingress.yaml" --validate=false
+
+- name: Apply ELK manifests
+  command: kubectl apply -R -f "{{ deploy_dir }}/elk/" --validate=false
 
 - name: Force rollout for updated services
   shell: |
@@ -40,4 +50,7 @@
 
 - name: Show kubectl output
   debug:
-    var: kubectl_output.stdout_lines
+    msg: "{{ item.stdout_lines }}"
+  loop: "{{ kubectl_output.results }}"
+  loop_control:
+    label: "{{ item.item }}"

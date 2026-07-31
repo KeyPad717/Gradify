@@ -9,7 +9,20 @@
   vars:
     deploy_dir: /tmp/gradify-k8s-deploy
     image_tag: "{{ lookup('env', 'GIT_COMMIT') | default('latest', true) }}"
-    build_services: "{{ (lookup('env', 'GRADIFY_BUILD_LIST') | default('', true) | split(',')) | reject('equalto', '') | list }}"
+    deploy_services:
+      - admin-service
+      - professor-service
+      - student-service
+      - user-service
+      - api-gateway
+      - stats-service
+      - front-end
+    # Services Jenkins actually rebuilt & pushed this run. Falls back to the
+    # full deploy_services list when GRADIFY_BUILD_LIST isn't set (e.g. a
+    # manual `ansible-playbook` run), mirroring the Jenkinsfile's own
+    # "no changeset -> full build" fallback.
+    build_list_raw: "{{ lookup('env', 'GRADIFY_BUILD_LIST') | default('', true) }}"
+    build_services: "{{ (build_list_raw.split(',') | select('string') | list) if build_list_raw else deploy_services }}"
 
   roles:
     - role: minikube_setup
