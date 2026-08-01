@@ -4,6 +4,8 @@ import com.example.student_service.model.EnrolledCourse;
 import com.example.student_service.model.GradeDistribution;
 import com.example.student_service.model.StudentRanking;
 import com.example.student_service.service.StudentService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,21 +20,28 @@ public class StudentController {
         this.studentService = studentService;
     }
 
-    /** GET /api/student/courses?email=student@example.com */
+    /** GET /api/student/courses — identity comes from the X-User-Email header set by api-gateway */
     @GetMapping("/courses")
-    public List<EnrolledCourse> getEnrolledCourses(@RequestParam String email) {
-        return studentService.getEnrolledCourses(email);
+    public ResponseEntity<List<EnrolledCourse>> getEnrolledCourses(
+            @RequestHeader(value = "X-User-Email", required = false) String authenticatedEmail) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(studentService.getEnrolledCourses(authenticatedEmail));
     }
 
     /**
-     * GET /api/student/courses/{courseId}/rankings?email=student@example.com
+     * GET /api/student/courses/{courseId}/rankings
      * Returns all students ranked by total marks; flags the requesting student.
      */
     @GetMapping("/courses/{courseId}/rankings")
-    public List<StudentRanking> getCourseRankings(
+    public ResponseEntity<List<StudentRanking>> getCourseRankings(
             @PathVariable Integer courseId,
-            @RequestParam String email) {
-        return studentService.getCourseRankings(courseId, email);
+            @RequestHeader(value = "X-User-Email", required = false) String authenticatedEmail) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(studentService.getCourseRankings(courseId, authenticatedEmail));
     }
 
     @GetMapping("/courses/{courseId}/grade-distribution")
@@ -41,7 +50,11 @@ public class StudentController {
     }
 
     @GetMapping("/cgpa")
-    public Double getStudentCGPA(@RequestParam String email) {
-        return studentService.getStudentCGPA(email);
+    public ResponseEntity<Double> getStudentCGPA(
+            @RequestHeader(value = "X-User-Email", required = false) String authenticatedEmail) {
+        if (authenticatedEmail == null || authenticatedEmail.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(studentService.getStudentCGPA(authenticatedEmail));
     }
 }

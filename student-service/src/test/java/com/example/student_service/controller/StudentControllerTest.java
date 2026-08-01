@@ -31,7 +31,7 @@ class StudentControllerTest {
         when(studentService.getEnrolledCourses("student@test.com"))
                 .thenReturn(List.of(new EnrolledCourse(1, "CS101", "Intro", "prof1", "2024-01-01")));
 
-        mockMvc.perform(get("/api/student/courses?email=student@test.com"))
+        mockMvc.perform(get("/api/student/courses").header("X-User-Email", "student@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].course_code").value("CS101"));
     }
@@ -41,9 +41,26 @@ class StudentControllerTest {
         when(studentService.getEnrolledCourses("none@test.com"))
                 .thenReturn(List.of());
 
-        mockMvc.perform(get("/api/student/courses?email=none@test.com"))
+        mockMvc.perform(get("/api/student/courses").header("X-User-Email", "none@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void getEnrolledCourses_usesHeaderIdentity_overEmailQueryParam() throws Exception {
+        when(studentService.getEnrolledCourses("studentA@x.com"))
+                .thenReturn(List.of(new EnrolledCourse(2, "CS202", "Advanced", "prof2", "2024-01-01")));
+
+        mockMvc.perform(get("/api/student/courses?email=studentB@x.com")
+                        .header("X-User-Email", "studentA@x.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].course_code").value("CS202"));
+    }
+
+    @Test
+    void getEnrolledCourses_returns401_whenHeaderMissing() throws Exception {
+        mockMvc.perform(get("/api/student/courses"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -54,7 +71,8 @@ class StudentControllerTest {
                         new StudentRanking(2, "s2", "Bob", "bob@test.com", null, 75.0, 100, "B", false)
                 ));
 
-        mockMvc.perform(get("/api/student/courses/1/rankings?email=student@test.com"))
+        mockMvc.perform(get("/api/student/courses/1/rankings")
+                        .header("X-User-Email", "student@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].rank").value(1))
                 .andExpect(jsonPath("$[0].student_name").value("Alice"))
@@ -67,9 +85,16 @@ class StudentControllerTest {
         when(studentService.getCourseRankings(1, "student@test.com"))
                 .thenReturn(List.of());
 
-        mockMvc.perform(get("/api/student/courses/1/rankings?email=student@test.com"))
+        mockMvc.perform(get("/api/student/courses/1/rankings")
+                        .header("X-User-Email", "student@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void getCourseRankings_returns401_whenHeaderMissing() throws Exception {
+        mockMvc.perform(get("/api/student/courses/1/rankings"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -98,7 +123,7 @@ class StudentControllerTest {
         when(studentService.getStudentCGPA("student@test.com"))
                 .thenReturn(3.5);
 
-        mockMvc.perform(get("/api/student/cgpa?email=student@test.com"))
+        mockMvc.perform(get("/api/student/cgpa").header("X-User-Email", "student@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").value(3.5));
     }
@@ -108,8 +133,14 @@ class StudentControllerTest {
         when(studentService.getStudentCGPA("new@test.com"))
                 .thenReturn(0.0);
 
-        mockMvc.perform(get("/api/student/cgpa?email=new@test.com"))
+        mockMvc.perform(get("/api/student/cgpa").header("X-User-Email", "new@test.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").value(0.0));
+    }
+
+    @Test
+    void getCGPA_returns401_whenHeaderMissing() throws Exception {
+        mockMvc.perform(get("/api/student/cgpa"))
+                .andExpect(status().isUnauthorized());
     }
 }
